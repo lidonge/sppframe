@@ -11,6 +11,7 @@
     <modules>
         <module>parallel</module>
         <module>common</module>
+        <module>cbod</module>
     </modules>
 
     <properties>

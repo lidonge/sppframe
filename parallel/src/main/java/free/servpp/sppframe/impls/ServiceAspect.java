@@ -22,17 +22,17 @@ public class ServiceAspect implements IServiceAspect {
         return aroundAtomicService(joinPoint);
     }
 
-    @Around("execution(void free.servpp.sppframe.common.IScenario.execSerial(free.servpp.sppframe.common.ISppContext, ..))")
+    @Around("execution(void free.servpp.sppframe.IScenario.execSerial( ..))")
     public void aroundSerial1(ProceedingJoinPoint joinPoint) throws Throwable {
         aroundSerial(joinPoint);
     }
 
-    @Around("execution(void free.servpp.sppframe.common.IScenario.execParallel(free.servpp.sppframe.common.ISppContext,..))")
+    @Around("execution(void free.servpp.sppframe.IScenario.execParallel(..))")
     public void aroundParallel1(ProceedingJoinPoint joinPoint) throws Throwable {
         aroundParallel(joinPoint);
     }
 
-    @Around("execution(void free.servpp.sppframe.common.IScenario.execTransaction(free.servpp.sppframe.common.ISppContext,..))")
+    @Around("execution(void free.servpp.sppframe.IScenario.execTransaction(..))")
     public void aroundTransaction1(ProceedingJoinPoint joinPoint) throws Throwable {
         aroundTransaction(joinPoint);
     }

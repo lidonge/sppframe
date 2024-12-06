@@ -8,7 +8,7 @@ import free.servpp.sppframe.common.ISppException;
  * @author lidong@date 2024-08-06@version 1.0
  */
 public interface ICheckStock extends IAtomicService {
-    default ISppException execute(ISppContext c1, Stock stock) {
+    default ISppException execute(Stock stock) {
         return null;
     }
 }

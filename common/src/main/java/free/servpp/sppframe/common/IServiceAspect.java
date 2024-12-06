@@ -10,8 +10,8 @@ import org.slf4j.Logger;
 public interface IServiceAspect extends ILogable {
     default ISppException aroundAtomicService(ProceedingJoinPoint joinPoint) throws Throwable{
         Object[] args = joinPoint.getArgs();
-        ISppContext context = (ISppContext) args[0];
-        Class<?> aClass = joinPoint.getThis().getClass();
+        ISppContext context = ISppContext.getSppContext();
+        Class<?> aClass = joinPoint.getTarget().getClass();
         String serviceName = context.getServiceContainer().getServiceName(aClass);
         Logger logger = getLogger();
         logger.info("Aspect aroundAtomicService:{}" , serviceName);
@@ -53,8 +53,8 @@ public interface IServiceAspect extends ILogable {
 
     default void aroundSerial(ProceedingJoinPoint joinPoint) throws Throwable{
         Object[] args = joinPoint.getArgs();
-        ISppContext context = (ISppContext) args[0];
-        String name = (String) args[1];
+        ISppContext context = ISppContext.getSppContext();
+        String name = (String) args[0];
         getLogger().info("Aspect aroundSerial:{}",name);
         context.enterSerialBlock(new Block(IBlock.BlockType.Serial,name));
         try {
@@ -71,8 +71,8 @@ public interface IServiceAspect extends ILogable {
 
     default void aroundParallel(ProceedingJoinPoint joinPoint) throws Throwable{
         Object[] args = joinPoint.getArgs();
-        ISppContext context = (ISppContext) args[0];
-        String name = (String) args[1];
+        ISppContext context = ISppContext.getSppContext();
+        String name = (String) args[0];
         getLogger().info("Aspect aroundParallel:{}",name);
         context.enterParallelBlock(new Block(IBlock.BlockType.Parallel,name));
         try {
@@ -89,8 +89,8 @@ public interface IServiceAspect extends ILogable {
 
     default void aroundTransaction(ProceedingJoinPoint joinPoint) throws Throwable{
         Object[] args = joinPoint.getArgs();
-        ISppContext context = (ISppContext) args[0];
-        String name = (String) args[1];
+        ISppContext context = ISppContext.getSppContext();
+        String name = (String) args[0];
         getLogger().info("Aspect aroundTransaction:{}",name);
         context.enterTransactionBlock(new Block(IBlock.BlockType.Transaction,name));
         try {

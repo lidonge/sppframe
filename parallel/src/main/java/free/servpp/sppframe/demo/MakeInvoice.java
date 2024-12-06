@@ -1,7 +1,5 @@
 package free.servpp.sppframe.demo;
 
-import free.servpp.sppframe.common.IExecutor;
-import free.servpp.sppframe.common.IScenario;
 import free.servpp.sppframe.common.ISppContext;
 import free.servpp.sppframe.impls.Scenario;
 
@@ -17,18 +15,18 @@ public class MakeInvoice extends Scenario<Invoice>{
     protected IDecStock decStock = new IDecStock(){};
 
     @Override
-    public void service(ISppContext context, Invoice invoice) {
-        execSerial(context,"query" , (c) -> {
-            queryAccount.execute(c,invoice.getBuyer(), invoice.getBuyerAccount());
-            execParallel(context, "check", (c1) -> {
-                calculateAmount.execute(c1,invoice.getGoods(), invoice.getAmount());
-                checkStock.execute(c1,invoice.getGoods().getStock());
+    public void service(Invoice invoice) {
+        execSerial("query" , () -> {
+            queryAccount.execute(invoice.getBuyer(), invoice.getBuyerAccount());
+            execParallel("check", () -> {
+                calculateAmount.execute(invoice.getGoods(), invoice.getAmount());
+                checkStock.execute(invoice.getGoods().getStock());
             });
         });
-        execTransaction(context,"update" ,(c) -> {
-            decAccount.execute(c,invoice.getBuyer(), invoice.getAmount());
-            incAccount.execute(c,invoice.getSeller(), invoice.getAmount());
-            decStock.execute(c,invoice.getGoods().getStock(), invoice.getAmount());
+        execTransaction("update" ,() -> {
+            decAccount.execute(invoice.getBuyer(), invoice.getAmount());
+            incAccount.execute(invoice.getSeller(), invoice.getAmount());
+            decStock.execute(invoice.getGoods().getStock(), invoice.getAmount());
         });
     }
 }

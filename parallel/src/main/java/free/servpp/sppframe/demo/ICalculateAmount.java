@@ -8,7 +8,7 @@ import free.servpp.sppframe.common.ISppException;
  * @author lidong@date 2024-08-06@version 1.0
  */
 public interface ICalculateAmount extends IAtomicService {
-    default ISppException execute(ISppContext c1, Goods goods, Amount amount) {
+    default ISppException execute( Goods goods, Amount amount) {
         return null;
     }
 }

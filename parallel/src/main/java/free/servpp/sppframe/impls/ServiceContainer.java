@@ -11,14 +11,10 @@ import java.util.Map;
  */
 public class ServiceContainer<T extends IAtomicService> implements IServiceContainer {
     private Map<Class<T>, IAtomicService> serviceMap = new HashMap<>();
-    private Map<Class<T>, String> serviceNames = new HashMap<>();
     private Map<String, Class<T>> serviceClasses = new HashMap<>();
     @Override
     public <T> T getService(Class<T> serviceClass) {
         T ret = (T) serviceMap.get(serviceClass);
-        if(ret == null){
-            ret = (T) ServiceContainerTool.getServiceName(serviceClass);
-        }
         return ret;
     }
 
@@ -29,6 +25,10 @@ public class ServiceContainer<T extends IAtomicService> implements IServiceConta
 
     @Override
     public String getServiceName(Class<?> clazz) {
-        return serviceNames.get(clazz);
+//        return ServiceContainerTool.getServiceName(clazz);
+        String ret = clazz.getSimpleName();
+        if(ret.length() == 0)
+            ret = ServiceContainerTool.getServiceName(clazz).substring(1);
+        return ret;
     }
 }

@@ -1,6 +1,4 @@
-package free.servpp.sppframe.impls;
-
-import free.servpp.sppframe.common.*;
+package free.servpp.sppframe.common;
 
 import java.util.*;
 
@@ -8,13 +6,16 @@ import java.util.*;
  * @author lidong@date 2024-08-07@version 1.0
  */
 public class SppContext implements ISppContext {
-    private IServiceAspectFactory serviceAspectFactory = new ServiceAspectFactory();
+    private IServiceAspectFactory serviceAspectFactory;
     private IServiceContainer serviceContainer;
     private Stack<IBlock> blocks = new Stack<>();
     private List<ISppException> exceptionList = new ArrayList<>();
 
     private IRunBlockExceptionHandler runBlockExceptionHandler;
     private ITransactionExceptionHandler transactionExceptionHandler;
+
+    SppContext() {
+    }
 
     public void setRunBlockExceptionHandler(IRunBlockExceptionHandler runBlockExceptionHandler) {
         this.runBlockExceptionHandler = runBlockExceptionHandler;
@@ -27,6 +28,10 @@ public class SppContext implements ISppContext {
     @Override
     public IServiceAspectFactory getServiceAspectFactory() {
         return serviceAspectFactory;
+    }
+
+    public void setServiceAspectFactory(IServiceAspectFactory serviceAspectFactory) {
+        this.serviceAspectFactory = serviceAspectFactory;
     }
 
     @Override

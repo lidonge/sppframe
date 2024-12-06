@@ -30,7 +30,7 @@ public class ServiceContainerTool {
         Class[] classes = clazz.getInterfaces();
         for (Class c:classes){
             if(hasInterface(c, IAtomicService.class)){
-                return c.getName();
+                return c.getSimpleName();
             }
         }
         return null;

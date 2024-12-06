@@ -8,7 +8,7 @@ import free.servpp.sppframe.common.ISppException;
  * @author lidong@date 2024-08-06@version 1.0
  */
 public interface IQueryAccount extends IAtomicService {
-    default ISppException execute(ISppContext c, Customer customer, Account account) {
+    default ISppException execute( Customer customer, Account account) {
         return null;
     }
 }

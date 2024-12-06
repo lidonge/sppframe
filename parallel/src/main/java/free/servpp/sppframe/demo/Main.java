@@ -1,10 +1,12 @@
 package free.servpp.sppframe.demo;
 
 import free.servpp.sppframe.common.IRunBlockExceptionHandler;
+import free.servpp.sppframe.common.ISppContext;
 import free.servpp.sppframe.common.ITransactionExceptionHandler;
 import free.servpp.sppframe.impls.ServiceAspect;
+import free.servpp.sppframe.impls.ServiceAspectFactory;
 import free.servpp.sppframe.impls.ServiceContainer;
-import free.servpp.sppframe.impls.SppContext;
+import free.servpp.sppframe.common.SppContext;
 import org.aspectj.lang.Aspects;
 
 /**
@@ -16,12 +18,12 @@ public class Main {
 //        new SppFrameAspect();
         MakeInvoice makeInvoice = new MakeInvoice();
 
-        SppContext context = new SppContext();
-        ServiceContainer serviceContainer = new ServiceContainer();
-        context.setServiceContainer(serviceContainer);
+        ISppContext context = ISppContext.getSppContext();
+        context.setServiceContainer(new ServiceContainer<>());
+        context.setServiceAspectFactory(new ServiceAspectFactory());
         context.setRunBlockExceptionHandler(new IRunBlockExceptionHandler() {});
         context.setTransactionExceptionHandler(new ITransactionExceptionHandler() {});
-        makeInvoice.service(context, new Invoice());
+        makeInvoice.service(new Invoice());
         System.out.println();
     }
 }

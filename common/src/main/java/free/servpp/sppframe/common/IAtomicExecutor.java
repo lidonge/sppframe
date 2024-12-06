@@ -13,6 +13,7 @@ public interface IAtomicExecutor {
         Class dynClass = getPolymorphicClass(context, serviceName);
         if(dynClass != null) {
             Method method = null;
+            //FIXME should prepare method
             for (Method m : dynClass.getDeclaredMethods()) {
                 m.setAccessible(true);
                 if (!getExecuteFunctionName().equals(m.getName()))
