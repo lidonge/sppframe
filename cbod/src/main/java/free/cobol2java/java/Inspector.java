@@ -1,11 +1,24 @@
 package free.cobol2java.java;
 
 /**
- * @author lidong@date 2024-10-10@version 1.0
- * inspect statement
+ * Runtime helper for COBOL {@code INSPECT} statements.
  *
+ * <p>This class implements the core string-oriented behavior behind
+ * {@code INSPECT TALLYING} and {@code INSPECT REPLACING}. The caller translates
+ * parsed COBOL syntax into {@link TallyingTarget}, {@link ReplaceStruct}, and
+ * {@link BeforeAfter} objects, then delegates the actual counting or replacing
+ * work to this helper.
+ *
+ * <p>Supported grammar shape:
+ *
+ * <pre>
  * inspectStatement
- *    : INSPECT identifier (inspectTallyingPhrase | inspectReplacingPhrase | inspectTallyingReplacingPhrase | inspectConvertingPhrase)
+ *    : INSPECT identifier
+ *      ( inspectTallyingPhrase
+ *      | inspectReplacingPhrase
+ *      | inspectTallyingReplacingPhrase
+ *      | inspectConvertingPhrase
+ *      )
  *    ;
  *
  * inspectTallyingPhrase
@@ -63,19 +76,50 @@ package free.cobol2java.java;
  * inspectBeforeAfter
  *    : (BEFORE | AFTER) INITIAL? (identifier | literal)
  *    ;
+ * </pre>
+ *
+ * <p>{@code CONVERTING} is documented here because it belongs to the same
+ * COBOL statement family, although this class currently focuses on tallying and
+ * replacing behavior.
  */
 public class Inspector {
     /**
-     * Variants used by INSPECT for ALL / LEADING / FIRST.
-     * A null value is reserved by the caller to represent CHARACTERS.
+     * Match modes used by COBOL {@code INSPECT}.
+     *
+     * <p>A {@code null} value is intentionally reserved by the caller to mean
+     * {@code CHARACTER} or {@code CHARACTERS}, where the operation applies to
+     * each character in the active slice rather than to a concrete search token.
      */
     public enum LeadType{
         ALL , LEADING , FIRST
     }
-
     /**
-     * Counts matches inside the effective INSPECT window.
-     * Any BEFORE / AFTER constraints attached to each target are applied first.
+     * Counts matches for one or more tally targets using character mode.
+     *
+     * <p>This overload is the runtime equivalent of COBOL
+     * {@code FOR CHARACTER(S)}. Each target can contribute its own
+     * {@code BEFORE}/{@code AFTER} constraints, and the counts are summed.
+     *
+     * @param src source text inspected by the COBOL statement
+     * @param targets tally targets to evaluate
+     * @return total count across all non-null targets
+     */
+    public static int tallyingFor(String src,  TallyingTarget... targets){
+        return tallyingFor(src, null, targets);
+    }
+    /**
+     * Counts matches for one or more tally targets inside the effective window.
+     *
+     * <p>For each target, this method first computes the active slice defined by
+     * its {@code BEFORE}/{@code AFTER} clauses, then applies the requested
+     * matching rule:
+     * {@code ALL}, {@code LEADING}, {@code FIRST}, or character mode when
+     * {@code leadType} is {@code null}.
+     *
+     * @param src source text inspected by the COBOL statement
+     * @param leadType matching mode; {@code null} means {@code CHARACTER(S)}
+     * @param targets tally targets to evaluate
+     * @return total count across all non-null targets
      */
     public static int tallyingFor(String src, LeadType leadType, TallyingTarget... targets){
         if (src == null || targets == null || targets.length == 0) {
@@ -94,8 +138,17 @@ public class Inspector {
     }
 
     /**
-     * Applies one INSPECT REPLACING rule inside the effective window.
-     * Content outside the window is preserved unchanged.
+     * Applies one COBOL {@code INSPECT REPLACING} rule to the source text.
+     *
+     * <p>The method keeps content outside the effective
+     * {@code BEFORE}/{@code AFTER} window unchanged and only replaces text
+     * within the slice selected for this rule.
+     *
+     * @param src source text inspected by the COBOL statement
+     * @param leadType replacement mode; {@code null} means {@code CHARACTER(S)}
+     * @param struct replacement rule including search text, replacement text,
+     *               and optional slice constraint
+     * @return a new string with the requested replacement applied
      */
     public static String replacingBy(String src,LeadType leadType, ReplaceStruct struct){
         if (src == null || struct == null) {
@@ -111,8 +164,10 @@ public class Inspector {
     }
 
     /**
-     * A null lead type means CHARACTER / CHARACTERS tallying,
-     * so the result is the length of the active window.
+     * Counts matches in one already-sliced segment.
+     *
+     * <p>A {@code null} lead type means COBOL {@code CHARACTER}/{@code CHARACTERS}
+     * tallying, so the count is simply the segment length.
      */
     private static int count(String value, LeadType leadType, String target) {
         if (value == null) {
@@ -133,8 +188,11 @@ public class Inspector {
     }
 
     /**
-     * A null lead type means CHARACTER / CHARACTERS replacing,
-     * so every character in the active window is replaced with the same value.
+     * Replaces content in one already-sliced segment.
+     *
+     * <p>A {@code null} lead type means COBOL {@code CHARACTER}/{@code CHARACTERS}
+     * replacing, so every character in the segment is replaced by the same
+     * runtime value.
      */
     private static String replace(String value, LeadType leadType, String find, String replacement) {
         if (value == null) {
@@ -210,7 +268,10 @@ public class Inspector {
     }
 
     /**
-     * Applies BEFORE / AFTER conditions in order and returns the effective INSPECT slice.
+     * Applies {@code BEFORE}/{@code AFTER} conditions in declaration order.
+     *
+     * <p>The returned slice represents the effective window seen by one
+     * tallying or replacing rule.
      */
     private static Slice slice(String src, BeforeAfter[] beforeAfters) {
         int start = 0;
@@ -234,8 +295,13 @@ public class Inspector {
     }
 
     /**
-     * BEFORE cuts the window at the marker, AFTER starts after the marker.
-     * INITIAL is currently treated as "first occurrence".
+     * Applies a single scope marker to the current active window.
+     *
+     * <p>{@code BEFORE} cuts the window at the located marker, while
+     * {@code AFTER} moves the window start to the first character after the
+     * marker. {@code INITIAL} is currently interpreted as "use the first
+     * occurrence", which matches the current implementation based on
+     * {@link String#indexOf(String, int)}.
      */
     private static int[] applyBeforeAfter(String src, int start, int end, BeforeAfter beforeAfter) {
         String marker = beforeAfter.getBeforeAfterString();
@@ -259,6 +325,13 @@ public class Inspector {
         return new int[]{Math.min(nextStart, end), end};
     }
 
+    /**
+     * Immutable representation of the active inspection window.
+     *
+     * @param start inclusive start offset in the original source string
+     * @param end exclusive end offset in the original source string
+     * @param value substring covered by {@code [start, end)}
+     */
     private record Slice(int start, int end, String value) {
     }
 }
