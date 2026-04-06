@@ -76,7 +76,8 @@ public class Util {
      * @param target
      * @param <T>
      */
-    public static <T> void copySameField(T src, Object target) {
+    public static <T, U> U copySameField(T src, U target) {
+        return target;
     }
 
     /**
@@ -87,5 +88,16 @@ public class Util {
      */
     public static String copyInitString(boolean isAll, String str) {
         return str;
+    }
+
+    public static boolean isNumeric(Object value) {
+        if (value == null) {
+            return false;
+        }
+        String text = value.toString();
+        if (text.isEmpty()) {
+            return false;
+        }
+        return text.matches("[+-]?\\d+(\\.\\d+)?");
     }
 }
