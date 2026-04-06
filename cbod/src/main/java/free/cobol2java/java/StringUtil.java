@@ -23,6 +23,34 @@ public class StringUtil {
     }
 
     /**
+     * Returns the substring before the first occurrence of the given COBOL
+     * delimiter. For SPACE/SPACES we stop at the first blank character.
+     */
+    public static String substring(Object target, Object delimiter) {
+        if (target == null) {
+            return "";
+        }
+
+        String value = String.valueOf(target);
+        if (delimiter == null) {
+            return value;
+        }
+
+        if (delimiter == CobolConstant.SPACE || delimiter == CobolConstant.SPACES) {
+            int next = value.indexOf(' ');
+            return next < 0 ? value : value.substring(0, next);
+        }
+
+        String actualDelimiter = String.valueOf(delimiter);
+        if (actualDelimiter.isEmpty()) {
+            return value;
+        }
+
+        int next = value.indexOf(actualDelimiter);
+        return next < 0 ? value : value.substring(0, next);
+    }
+
+    /**
      * Splits the source sequentially by a single delimiter and writes results
      * back into each INTO target.
      * countIn stores the piece length, and delimiterIn stores the length of
