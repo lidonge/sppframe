@@ -34,6 +34,13 @@ public class Function {
     }
 
     /**
+     * COBOL FUNCTION REM maps to the same arithmetic remainder behavior here.
+     */
+    public static int rem(int a, int b) {
+        return a % b;
+    }
+
+    /**
      * Returns the current calendar date in YYYYMMDD integer form.
      * This matches the numeric shape commonly used by generated COBOL runtime code.
      */
