@@ -1,5 +1,7 @@
 package free.cobol2java.java;
 
+import java.util.Arrays;
+
 /**
  * @author lidong@date 2024-09-04@version 1.0
  */
@@ -90,6 +92,14 @@ public class Util {
         return str;
     }
 
+    
+    public static void setFullArray(String[] target, String value) {
+        if (target == null) {
+            return;
+        }
+        Arrays.fill(target, value);
+    }
+    
     public static boolean isNumeric(Object value) {
         if (value == null) {
             return false;
