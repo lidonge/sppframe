@@ -2,5 +2,5 @@ package free.cobol2java.java.external;
 
 import free.cobol2java.java.IService;
 
-public class Ceedatm extends IService {
+public class Ceedatm implements IService {
 }
