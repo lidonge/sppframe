@@ -45,6 +45,12 @@ public final class CicsUtil {
         public T getPayload() {
             return payload;
         }
+
+        @Override
+        public String toString() {
+            return "Response [resp=" + resp + ", resp2=" + resp2 + ", payload=" + payload + "]";
+        }
+
     }
 
     public interface CicsMap<T> {
@@ -78,6 +84,13 @@ public final class CicsUtil {
             this.initialValue = initialValue;
             this.attributes = attributes;
         }
+
+        @Override
+        public String toString() {
+            return "BmsFieldMeta [name=" + name + ", row=" + row + ", column=" + column + ", length=" + length
+                    + ", initialValue=" + initialValue + ", attributes=" + attributes + "]";
+        }
+        
     }
 
     public static <T> Response<T> receiveMap(String map, String mapset, T into) {
@@ -123,15 +136,22 @@ public final class CicsUtil {
             return request;
         }
         bindPayloadFromMap(request, payload, normalizedValues);
+        MAP_BUFFERS.put(terminalKey(request.getMapName(), request.getMapSetName()), deepCopy(payload));
         return request;
     }
 
     public static Map<String, Object> extractMapFields(CicsMap<?> request) {
         Map<String, Object> result = new LinkedHashMap<>();
-        if (request == null || request.getPayload() == null) {
+        if (request == null) {
             return result;
         }
-        Object payload = request.getPayload();
+        Object payload = MAP_BUFFERS.get(terminalKey(request.getMapName(), request.getMapSetName()));
+        if (payload == null) {
+            payload = request.getPayload();
+        }
+        if (payload == null) {
+            return result;
+        }
         for (Field field : getAllInstanceFields(payload.getClass())) {
             try {
                 field.setAccessible(true);
