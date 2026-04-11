@@ -1,11 +1,18 @@
 package free.cobol2java.java;
 
+import free.cobol2java.cics.CicsCrudRepository;
+import free.cobol2java.cics.CicsDataAccessException;
+import free.cobol2java.cics.DuplicateKeyException;
+import free.cobol2java.cics.RecordNotFoundException;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -198,6 +205,18 @@ public final class CicsUtil {
         if (key == null) {
             return error(16, 1, null);
         }
+        CicsCrudRepository<Object, Object> repository = resolveCrudRepository(file);
+        if (repository != null) {
+            try {
+                repository.write(key, deepCopy(from));
+                LAST_READ_KEYS.put(file, key);
+                return ok(null);
+            } catch (DuplicateKeyException e) {
+                return error(22, 1, null);
+            } catch (CicsDataAccessException e) {
+                return error(16, 9, null);
+            }
+        }
         VSAM_FILES.computeIfAbsent(file, unused -> new ConcurrentHashMap<>())
                 .put(key, deepCopy(from));
         LAST_READ_KEYS.put(file, key);
@@ -208,6 +227,22 @@ public final class CicsUtil {
         Object key = normalizeKey(ridfld);
         if (key == null) {
             return error(16, 1, into);
+        }
+        CicsCrudRepository<Object, Object> repository = resolveCrudRepository(file);
+        if (repository != null) {
+            try {
+                Optional<Object> stored = repository.read(key);
+                if (stored == null || stored.isEmpty()) {
+                    return error(13, 1, into);
+                }
+                if (into != null) {
+                    copyState(stored.get(), into);
+                }
+                LAST_READ_KEYS.put(file, key);
+                return ok(into);
+            } catch (CicsDataAccessException e) {
+                return error(16, 9, into);
+            }
         }
         Object stored = VSAM_FILES.computeIfAbsent(file, unused -> new ConcurrentHashMap<>()).get(key);
         if (stored == null) {
@@ -225,6 +260,17 @@ public final class CicsUtil {
         if (key == null) {
             return error(16, 2, null);
         }
+        CicsCrudRepository<Object, Object> repository = resolveCrudRepository(file);
+        if (repository != null) {
+            try {
+                repository.rewrite(key, deepCopy(from));
+                return ok(null);
+            } catch (RecordNotFoundException e) {
+                return error(13, 1, null);
+            } catch (CicsDataAccessException e) {
+                return error(16, 9, null);
+            }
+        }
         VSAM_FILES.computeIfAbsent(file, unused -> new ConcurrentHashMap<>())
                 .put(key, deepCopy(from));
         return ok(null);
@@ -234,6 +280,18 @@ public final class CicsUtil {
         Object key = normalizeKey(ridfld);
         if (key == null) {
             return error(16, 1, null);
+        }
+        CicsCrudRepository<Object, Object> repository = resolveCrudRepository(file);
+        if (repository != null) {
+            try {
+                repository.delete(key);
+                LAST_READ_KEYS.remove(file);
+                return ok(null);
+            } catch (RecordNotFoundException e) {
+                return error(13, 1, null);
+            } catch (CicsDataAccessException e) {
+                return error(16, 9, null);
+            }
         }
         Map<Object, Object> fileStore = VSAM_FILES.computeIfAbsent(file, unused -> new ConcurrentHashMap<>());
         Object removed = fileStore.remove(key);
@@ -268,6 +326,69 @@ public final class CicsUtil {
             return value;
         }
         return Objects.toString(value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static CicsCrudRepository<Object, Object> resolveCrudRepository(String file) {
+        if (file == null || file.isBlank()) {
+            return null;
+        }
+        try {
+            if (ServiceManager.getServiceContainer() == null) {
+                return null;
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        for (String beanName : repositoryBeanNames(file)) {
+            try {
+                Object bean = ServiceManager.getServiceContainer().getService(beanName);
+                if (bean instanceof CicsCrudRepository<?, ?> repository) {
+                    return (CicsCrudRepository<Object, Object>) repository;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private static List<String> repositoryBeanNames(String file) {
+        String normalized = file.trim();
+        String camel = toCamel(normalized);
+        String classLike = toClassLike(normalized);
+        return List.of(
+                camel + "Repository",
+                camel + "Mapper",
+                "cics" + classLike + "Repository",
+                "cics" + classLike + "Mapper",
+                normalized,
+                normalized.toLowerCase() + "Repository",
+                normalized.toLowerCase() + "Mapper"
+        );
+    }
+
+    private static String toCamel(String name) {
+        String classLike = toClassLike(name);
+        if (classLike.isEmpty()) {
+            return classLike;
+        }
+        return Character.toLowerCase(classLike.charAt(0)) + classLike.substring(1);
+    }
+
+    private static String toClassLike(String name) {
+        if (name == null || name.isBlank()) {
+            return "";
+        }
+        String[] parts = name.trim().split("[^A-Za-z0-9]+");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (part.isBlank()) {
+                continue;
+            }
+            String lower = part.toLowerCase();
+            sb.append(Character.toUpperCase(lower.charAt(0))).append(lower.substring(1));
+        }
+        return sb.toString();
     }
 
     @SuppressWarnings("unchecked")

@@ -68,11 +68,37 @@ public class Util {
         return obj == null ? 0 : obj.toString().length();
     }
     public static int compare(Object subvalue, CobolConstant constant) {
-        return 0;
+        if (constant == null) {
+            return compare(subvalue, (Object) null);
+        }
+        return compare(subvalue, cobolConstantValue(constant));
     }
 
     public static int compare(Object subvalue, Object cSaDrwByPsbk) {
-        return 0;
+        if (subvalue == cSaDrwByPsbk) {
+            return 0;
+        }
+        if (subvalue == null) {
+            return -1;
+        }
+        if (cSaDrwByPsbk == null) {
+            return 1;
+        }
+        if (isNumeric(subvalue) && isNumeric(cSaDrwByPsbk)) {
+            return new java.math.BigDecimal(subvalue.toString().trim())
+                    .compareTo(new java.math.BigDecimal(cSaDrwByPsbk.toString().trim()));
+        }
+        return subvalue.toString().compareTo(cSaDrwByPsbk.toString());
+    }
+
+    private static Object cobolConstantValue(CobolConstant constant) {
+        return switch (constant) {
+            case SPACE, SPACES -> " ";
+            case ZERO, ZEROS, ZEROES -> "0";
+            case QUOTE, QUOTES -> "\"";
+            case NULL, NULLS -> null;
+            default -> constant.name();
+        };
     }
 
     public static boolean equalsTo(Object left, Object right) {
