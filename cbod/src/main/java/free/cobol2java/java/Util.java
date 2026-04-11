@@ -1,32 +1,54 @@
 package free.cobol2java.java;
 
 import java.util.Arrays;
+import java.util.Scanner;
 
 /**
  * @author lidong@date 2024-09-04@version 1.0
  */
 public class Util {
-    public static void output(Object ...args) {
+    public static void output(Object... args) {
+        if(args == null || args.length == 0) {
+            System.out.println();
+            return;
+        }
+        System.out.println(Arrays.toString(args));
     }
 
     public static String Input() {
-        return "";
+        return new Scanner(System.in).nextLine();
     }
 
     public static String now() {
-        return "";
+        return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
     }
 
     public static Object init(Class typeClass, String pictureStr) {
         return "";
     }
 
+    public static String subvalue(Object obj, int start, int len) {
+        return subvalue(obj, Integer.valueOf(start), Integer.valueOf(len));
+    }
+
     public static String subvalue(Object obj, Integer start, Integer len) {
-        return null;
+        if (obj == null) {
+            return null;
+        }
+        String text = obj.toString();
+        int begin = start == null ? 0 : Math.max(0, start - 1);
+        if (begin >= text.length()) {
+            return "";
+        }
+        if (len == null) {
+            return text.substring(begin);
+        }
+        int end = Math.min(text.length(), begin + Math.max(0, len));
+        return text.substring(begin, end);
     }
 
     public static Integer sizeof(Object obj) {
-        return 0;
+        return lengthOf(obj);
     }
 
     public static Integer copyCastToInteger(Object src) {
@@ -42,8 +64,8 @@ public class Util {
         return null;
     }
 
-    public static int lengthOf(Object fmCurrCod) {
-        return 0;
+    public static int lengthOf(Object obj) {
+        return obj == null ? 0 : obj.toString().length();
     }
     public static int compare(Object subvalue, CobolConstant constant) {
         return 0;
@@ -53,12 +75,16 @@ public class Util {
         return 0;
     }
 
+    public static boolean equalsTo(Object left, Object right) {
+        return false;
+    }
+
     public static <T> T copyObject(Object src, T target, Integer start, Integer length) {
         return null;
     }
 
     public static String substring(Object wsStringA, int len) {
-        return null;
+        return subvalue(wsStringA, 0, len);
     }
 
     /**
