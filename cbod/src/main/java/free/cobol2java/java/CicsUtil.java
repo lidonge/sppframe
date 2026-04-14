@@ -295,6 +295,19 @@ public final class CicsUtil {
         }
         Map<Object, Object> fileStore = VSAM_FILES.computeIfAbsent(file, unused -> new ConcurrentHashMap<>());
         Object removed = fileStore.remove(key);
+        if (removed == null) {
+            Object matchedKey = null;
+            for (Object existingKey : fileStore.keySet()) {
+                if (Objects.equals(normalizeKey(existingKey), key)
+                        || Objects.equals(Objects.toString(existingKey, null), Objects.toString(key, null))) {
+                    matchedKey = existingKey;
+                    break;
+                }
+            }
+            if (matchedKey != null) {
+                removed = fileStore.remove(matchedKey);
+            }
+        }
         LAST_READ_KEYS.remove(file);
         return removed == null ? error(13, 1, null) : ok(null);
     }
@@ -333,16 +346,13 @@ public final class CicsUtil {
         if (file == null || file.isBlank()) {
             return null;
         }
-        try {
-            if (ServiceManager.getServiceContainer() == null) {
-                return null;
-            }
-        } catch (Exception e) {
+        Object serviceContainer = resolveServiceContainer();
+        if (serviceContainer == null) {
             return null;
         }
         for (String beanName : repositoryBeanNames(file)) {
             try {
-                Object bean = ServiceManager.getServiceContainer().getService(beanName);
+                Object bean = serviceContainer.getClass().getMethod("getService", String.class).invoke(serviceContainer, beanName);
                 if (bean instanceof CicsCrudRepository<?, ?> repository) {
                     return (CicsCrudRepository<Object, Object>) repository;
                 }
@@ -350,6 +360,15 @@ public final class CicsUtil {
             }
         }
         return null;
+    }
+
+    private static Object resolveServiceContainer() {
+        try {
+            Class<?> managerClass = Class.forName("free.cobol2java.java.ServiceManager");
+            return managerClass.getMethod("getServiceContainer").invoke(null);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     private static List<String> repositoryBeanNames(String file) {
@@ -556,10 +575,14 @@ public final class CicsUtil {
         if (source == null || target == null) {
             return;
         }
-        copyFields(source, target, target.getClass());
+        copyFields(source, target, target.getClass(), false);
     }
 
     private static void copyFields(Object source, Object target, Class<?> type) {
+        copyFields(source, target, type, true);
+    }
+
+    private static void copyFields(Object source, Object target, Class<?> type, boolean strictSourceType) {
         Class<?> current = type;
         while (current != null && current != Object.class) {
             Field[] fields = current.getDeclaredFields();
@@ -569,7 +592,7 @@ public final class CicsUtil {
                 }
                 try {
                     field.setAccessible(true);
-                    Object value = field.get(source);
+                    Object value = readSourceFieldValue(source, field, strictSourceType);
                     if (value != null && !isSimpleValue(field.getType())) {
                         value = deepCopy(value);
                     }
@@ -579,6 +602,30 @@ public final class CicsUtil {
             }
             current = current.getSuperclass();
         }
+    }
+
+    private static Object readSourceFieldValue(Object source, Field targetField, boolean strictSourceType) throws IllegalAccessException {
+        if (strictSourceType) {
+            return targetField.get(source);
+        }
+        Field sourceField = findField(source.getClass(), targetField.getName());
+        if (sourceField == null) {
+            return null;
+        }
+        sourceField.setAccessible(true);
+        return sourceField.get(source);
+    }
+
+    private static Field findField(Class<?> type, String name) {
+        Class<?> current = type;
+        while (current != null && current != Object.class) {
+            try {
+                return current.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        return null;
     }
 
     private static boolean isSimpleValue(Class<?> type) {
