@@ -1,5 +1,8 @@
 package free.cobol2java.java;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 import java.util.Arrays;
 import java.util.Scanner;
 
@@ -62,6 +65,91 @@ public class Util {
     }
     public static <T> T copyCast(Object src, T target) {
         return null;
+    }
+
+    public static BigDecimal bigDecimalValue(Object value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (value instanceof BigInteger integer) {
+            return new BigDecimal(integer);
+        }
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long) {
+            return BigDecimal.valueOf(((Number) value).longValue());
+        }
+        if (value instanceof Float || value instanceof Double) {
+            return BigDecimal.valueOf(((Number) value).doubleValue());
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? BigDecimal.ZERO : new BigDecimal(text);
+    }
+
+    public static BigInteger bigIntegerValue(Object value) {
+        if (value == null) {
+            return BigInteger.ZERO;
+        }
+        if (value instanceof BigInteger integer) {
+            return integer;
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal.toBigInteger();
+        }
+        if (value instanceof Number number) {
+            return BigInteger.valueOf(number.longValue());
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? BigInteger.ZERO : new BigDecimal(text).toBigInteger();
+    }
+
+    public static BigDecimal bigDecimalAdd(Object left, Object right) {
+        return bigDecimalValue(left).add(bigDecimalValue(right));
+    }
+
+    public static BigDecimal bigDecimalSubtract(Object left, Object right) {
+        return bigDecimalValue(left).subtract(bigDecimalValue(right));
+    }
+
+    public static BigDecimal bigDecimalMultiply(Object left, Object right) {
+        return bigDecimalValue(left).multiply(bigDecimalValue(right));
+    }
+
+    public static BigDecimal bigDecimalDivide(Object left, Object right) {
+        return bigDecimalValue(left).divide(bigDecimalValue(right), MathContext.DECIMAL128);
+    }
+
+    public static BigDecimal bigDecimalRemainder(Object left, Object right) {
+        return bigDecimalValue(left).remainder(bigDecimalValue(right));
+    }
+
+    public static BigDecimal bigDecimalNegate(Object value) {
+        return bigDecimalValue(value).negate();
+    }
+
+    public static BigInteger bigIntegerAdd(Object left, Object right) {
+        return bigIntegerValue(left).add(bigIntegerValue(right));
+    }
+
+    public static BigInteger bigIntegerSubtract(Object left, Object right) {
+        return bigIntegerValue(left).subtract(bigIntegerValue(right));
+    }
+
+    public static BigInteger bigIntegerMultiply(Object left, Object right) {
+        return bigIntegerValue(left).multiply(bigIntegerValue(right));
+    }
+
+    public static BigInteger bigIntegerDivide(Object left, Object right) {
+        return bigIntegerValue(left).divide(bigIntegerValue(right));
+    }
+
+    public static BigInteger bigIntegerRemainder(Object left, Object right) {
+        return bigIntegerValue(left).remainder(bigIntegerValue(right));
+    }
+
+    public static BigInteger bigIntegerNegate(Object value) {
+        return bigIntegerValue(value).negate();
     }
 
     public static int lengthOf(Object obj) {
