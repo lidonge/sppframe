@@ -1,7 +1,5 @@
 package free.cobol2java.java;
 
-import free.cobol2java.java.redefines.AbstractCobolRedefines;
-
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -18,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Scanner;
+
+import free.cobol2java.java.redefines.AbstractCobolRedefines;
 
 /**
  * Runtime helpers used by generated COBOL-to-Java programs.
@@ -488,12 +488,29 @@ public class Util {
         return target;
     }
 
-    public static String copyInitString(boolean isAll, String str) {
-        String base = str == null ? " " : str;
-        if (isAll && !base.isEmpty()) {
-            return ALL_MARKER_PREFIX + base.charAt(0);
+    public static String initString(boolean isAll, Integer precision, String str) {
+        if (precision == null || precision < 0) {
+            throw new IllegalArgumentException("String init precision is required");
         }
-        return base;
+        String base = str == null ? " " : str;
+        if (precision == 0) {
+            return "";
+        }
+        if (isAll) {
+            if (base.isEmpty()) {
+                return repeat(' ', precision);
+            }
+            return repeatPattern(base, precision);
+        }
+        return fitToPrecision(base, precision);
+    }
+
+    public static String allString(String str) {
+        String base = str == null ? " " : str;
+        if (base.isEmpty()) {
+            return "";
+        }
+        return ALL_MARKER_PREFIX + base.charAt(0);
     }
 
     public static void setFullArray(String[] target, String value) {
@@ -859,10 +876,10 @@ public class Util {
             return " ";
         }
         if (spec.alphaLength > 0) {
-            return repeat(' ', spec.alphaLength);
+            return initString(true, spec.alphaLength, " ");
         }
         if (spec.numericDigits > 0) {
-            return repeat('0', spec.numericDigits);
+            return initString(true, spec.numericDigits, "0");
         }
         return " ";
     }
@@ -1128,6 +1145,25 @@ public class Util {
 
     private static String expandAllMarker(String marker, int length) {
         return repeat(marker.charAt(ALL_MARKER_PREFIX.length()), length);
+    }
+
+    private static String repeatPattern(String pattern, int length) {
+        if (pattern == null || pattern.isEmpty() || length <= 0) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder(length);
+        while (builder.length() < length) {
+            builder.append(pattern);
+        }
+        return builder.substring(0, length);
+    }
+
+    private static String fitToPrecision(String text, int precision) {
+        String actual = text == null ? "" : text;
+        if (actual.length() <= precision) {
+            return actual;
+        }
+        return actual.substring(0, precision);
     }
 
     private static String padRight(String text, int length, char fill) {
