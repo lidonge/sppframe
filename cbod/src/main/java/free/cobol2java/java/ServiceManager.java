@@ -62,12 +62,22 @@ public class ServiceManager {
         return springServiceContainer;
     }
 
+    public static void setServiceContainer(IServiceContainer serviceContainer) {
+        springServiceContainer = serviceContainer;
+    }
+
+    public static void clearServiceContainer() {
+        springServiceContainer = null;
+        CLASS_CACHE.clear();
+        RETURN_CODES.clear();
+    }
+
     public static Integer getReturnCode(Object owner) {
         return RETURN_CODES.getOrDefault(returnCodeKey(owner), 0);
     }
 
     public static Integer setReturnCode(Object owner, Object value) {
-        Integer code = Util.copyCastToInteger(value);
+        Integer code = Util.copyInteger(value);
         RETURN_CODES.put(returnCodeKey(owner), code == null ? 0 : code);
         return code;
     }
