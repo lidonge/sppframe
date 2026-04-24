@@ -428,9 +428,11 @@ public class Util {
         return copy(builder.toString(), target);
     }
 
-    @SuppressWarnings("unchecked")
-    public static <T> T cast(T castTo, Object from) {
-        return from == null ? null : (T) from;
+    public static <T> T cast(Class<T> castTo, Object from) {
+        if (castTo == null || from == null) {
+            return null;
+        }
+        return castTo.cast(from);
     }
 
     public static String substring(Object wsStringA, int len) {
