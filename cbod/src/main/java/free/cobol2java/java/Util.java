@@ -53,12 +53,15 @@ public class Util {
         return now();
     }
 
-    public static Object init(Class typeClass, String pictureStr) {
+    public static Object init(Class typeClass, int precision, int scale) {
         if (typeClass == null) {
             return null;
         }
+        if (precision < 0 || scale < 0) {
+            throw new IllegalArgumentException("Init precision/scale must be >= 0");
+        }
         if (typeClass == String.class) {
-            return defaultStringForPicture(pictureStr);
+            return precision > 0 ? initString(true, precision, " ") : " ";
         }
         if (typeClass == Integer.class || typeClass == Integer.TYPE) {
             return 0;
@@ -79,7 +82,7 @@ public class Util {
             return 0f;
         }
         if (typeClass == BigDecimal.class) {
-            return BigDecimal.ZERO;
+            return BigDecimal.ZERO.setScale(Math.max(scale, 0), RoundingMode.DOWN);
         }
         if (typeClass == BigInteger.class) {
             return BigInteger.ZERO;
@@ -95,6 +98,74 @@ public class Util {
             initializeObject(instance);
         }
         return instance;
+    }
+
+    public static Object initValue(Class typeClass, int precision, int scale, Object value) {
+        return initValue(typeClass, precision, scale, false, value);
+    }
+
+    public static Object initValue(Class typeClass, int precision, int scale, boolean isAll, Object value) {
+        if (typeClass == null) {
+            return null;
+        }
+        if (precision < 0 || scale < 0) {
+            throw new IllegalArgumentException("Init value precision/scale must be >= 0");
+        }
+
+        Object normalizedValue = normalizeInitValue(value);
+        if (normalizedValue == null) {
+            return null;
+        }
+        if (typeClass == String.class) {
+            String text = normalizeInitValueString(normalizedValue);
+            boolean expand = isAll || shouldExpandInitValue(value, normalizedValue);
+            return precision > 0 ? initString(expand, precision, text) : text;
+        }
+        if (typeClass == Integer.class || typeClass == Integer.TYPE) {
+            return copyInteger(normalizedValue);
+        }
+        if (typeClass == Long.class || typeClass == Long.TYPE) {
+            return copyLong(normalizedValue);
+        }
+        if (typeClass == Short.class || typeClass == Short.TYPE) {
+            return copyShort(normalizedValue);
+        }
+        if (typeClass == Byte.class || typeClass == Byte.TYPE) {
+            return copyByte(normalizedValue);
+        }
+        if (typeClass == Double.class || typeClass == Double.TYPE) {
+            return copyDouble(normalizedValue);
+        }
+        if (typeClass == Float.class || typeClass == Float.TYPE) {
+            return copyFloat(normalizedValue);
+        }
+        if (typeClass == BigDecimal.class) {
+            return bigDecimalValue(normalizedValue).setScale(Math.max(scale, 0), RoundingMode.DOWN);
+        }
+        if (typeClass == BigInteger.class) {
+            return bigIntegerValue(normalizedValue);
+        }
+        if (typeClass == Boolean.class || typeClass == Boolean.TYPE) {
+            return booleanValue(normalizedValue);
+        }
+        if (typeClass == Character.class || typeClass == Character.TYPE) {
+            return characterValue(normalizedValue);
+        }
+
+        Object instance = init(typeClass, precision, scale);
+        if (instance == null || typeClass.isInstance(normalizedValue)) {
+            return normalizedValue;
+        }
+        return copy(normalizedValue, instance);
+    }
+
+    @Deprecated
+    public static Object init(Class typeClass, String pictureStr) {
+        if (typeClass == String.class) {
+            return defaultStringForPicture(pictureStr);
+        }
+        PictureSpec spec = parsePicture(pictureStr);
+        return init(typeClass, picturePrecision(spec), pictureScale(spec));
     }
 
     public static String subvalue(Object obj, int start, int len) {
@@ -876,7 +947,7 @@ public class Util {
             return " ";
         }
         if (spec.alphaLength > 0) {
-            return initString(true, spec.alphaLength, " ");
+            return (String) init(String.class, spec.alphaLength, 0);
         }
         if (spec.numericDigits > 0) {
             return initString(true, spec.numericDigits, "0");
@@ -1164,6 +1235,77 @@ public class Util {
             return actual;
         }
         return actual.substring(0, precision);
+    }
+
+    private static Object normalizeInitValue(Object value) {
+        if (value instanceof CobolConstant constant) {
+            return cobolConstantValue(constant);
+        }
+        return value;
+    }
+
+    private static boolean shouldExpandInitValue(Object rawValue, Object normalizedValue) {
+        if (rawValue instanceof CobolConstant constant) {
+            return switch (constant) {
+                case SPACE, SPACES, ZERO, ZEROS, ZEROES, QUOTE, QUOTES, LOW_VALUE, LOW_VALUES, HIGH_VALUE, HIGH_VALUES -> true;
+                default -> false;
+            };
+        }
+        return normalizedValue instanceof String str && str.startsWith(ALL_MARKER_PREFIX);
+    }
+
+    private static String normalizeInitValueString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = copyStringWithoutGroup(value);
+        if (text != null && text.startsWith(ALL_MARKER_PREFIX)) {
+            return text.substring(ALL_MARKER_PREFIX.length());
+        }
+        return text;
+    }
+
+    private static Boolean booleanValue(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        String text = copyStringWithoutGroup(value);
+        if (text == null || text.isBlank()) {
+            return Boolean.FALSE;
+        }
+        String normalized = text.trim();
+        if ("1".equals(normalized)) {
+            return Boolean.TRUE;
+        }
+        if ("0".equals(normalized)) {
+            return Boolean.FALSE;
+        }
+        return Boolean.parseBoolean(normalized);
+    }
+
+    private static Character characterValue(Object value) {
+        if (value instanceof Character character) {
+            return character;
+        }
+        String text = copyStringWithoutGroup(value);
+        if (text == null || text.isEmpty()) {
+            return '\0';
+        }
+        return text.charAt(0);
+    }
+
+    private static int picturePrecision(PictureSpec spec) {
+        if (spec == null) {
+            return 0;
+        }
+        if (spec.alphaLength > 0) {
+            return spec.alphaLength;
+        }
+        return Math.max(spec.numericDigits, 0);
+    }
+
+    private static int pictureScale(PictureSpec spec) {
+        return spec == null ? 0 : Math.max(spec.scale, 0);
     }
 
     private static String padRight(String text, int length, char fill) {
