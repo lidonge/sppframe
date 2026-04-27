@@ -122,6 +122,14 @@ public final class SqlRuntime {
         // Placeholder for transaction integration when repository/runtime wiring is ready.
     }
 
+    public static void rollback() {
+        // Placeholder for transaction rollback integration when repository/runtime wiring is ready.
+    }
+
+    public static String currentTimestamp() {
+        return java.time.LocalDateTime.now().toString();
+    }
+
     public static void prepare(String statementName, Object sqlSource) {
         if (statementName == null || statementName.isBlank()) {
             return;

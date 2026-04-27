@@ -28,4 +28,9 @@ public @interface FieldInfo {
      * Returns the COBOL USAGE clause value when one was present.
      */
     String usageType() default "";
+
+    int precision() default -1;
+
+    int scale() default 0;
+
 }

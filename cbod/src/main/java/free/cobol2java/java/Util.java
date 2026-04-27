@@ -30,7 +30,9 @@ public class Util {
             System.out.println();
             return;
         }
-        System.out.println(Arrays.toString(args));
+        for(int i = 0;i<args.length;i++)
+            System.out.print(args[i]);
+        System.out.println();
     }
 
     public static String Input() {

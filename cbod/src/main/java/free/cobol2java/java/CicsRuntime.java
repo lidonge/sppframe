@@ -68,6 +68,14 @@ public final class CicsRuntime {
         return CicsUtil.returnControl();
     }
 
+    public static synchronized CicsUtil.Response<Void> syncpoint() {
+        return CicsUtil.returnControl();
+    }
+
+    public static synchronized CicsUtil.Response<Void> syncpointRollback() {
+        return CicsUtil.returnControl();
+    }
+
     public static synchronized void clearReturnRequests() {
         RETURN_REQUESTS.clear();
     }
