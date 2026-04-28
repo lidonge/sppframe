@@ -1,19 +1,19 @@
 package free.cobol2java.java;
 
+import free.cobol2java.cics.CicsCrudRepository;
+import free.cobol2java.cics.CicsDataAccessException;
+
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Minimal browse runtime for generated STARTBR/READNEXT/READPREV/ENDBR code.
- *
- * <p>It reuses the in-memory VSAM state already maintained by {@link CicsUtil}
- * so browse flows can be validated without changing the broader CRUD runtime.</p>
  */
 public final class CicsBrowseUtil {
     private static final Map<String, BrowseState> BROWSE_STATES = new ConcurrentHashMap<>();
@@ -21,47 +21,58 @@ public final class CicsBrowseUtil {
     private CicsBrowseUtil() {
     }
 
-    public static CicsUtil.Response<Void> startBrowse(String file, Object ridfld, boolean gteq) {
-        return startBrowse(file, ridfld, gteq, !gteq, false, null);
+    public static CicsUtil.Response<Void> startBrowse(CicsCrudRepository<Object, Object> repository, Object ridfld,
+                                                      boolean gteq) {
+        return startBrowse(repository, ridfld, gteq, !gteq, false, null);
     }
 
-    public static CicsUtil.Response<Void> startBrowse(String file, Object ridfld, boolean gteq, boolean equal,
+    public static CicsUtil.Response<Void> startBrowse(CicsCrudRepository<Object, Object> repository, Object ridfld,
+                                                      boolean gteq, boolean equal,
                                                       boolean generic, Integer keyLength) {
-        if (file == null || file.isBlank()) {
+        if (repository == null) {
             return response(16, 1, null);
         }
-        List<Object> keys = snapshotKeys(file);
+        List<Object> keys = snapshotKeys(repository);
         Object normalizedKey = normalizeKey(ridfld);
         int position = resolveStartPosition(keys, normalizedKey, gteq, equal, generic, keyLength);
+        String browseKey = browseKey(repository);
         if (position < 0) {
-            BROWSE_STATES.remove(file);
+            BROWSE_STATES.remove(browseKey);
             return response(13, 1, null);
         }
-        BROWSE_STATES.put(file, new BrowseState(position));
+        BROWSE_STATES.put(browseKey, new BrowseState(position));
         return response(0, 0, null);
     }
 
-    public static <T> CicsUtil.Response<T> readNext(String file, T into, Object ridfld, Integer length) {
-        BrowseState state = BROWSE_STATES.get(file);
+    public static <T> CicsUtil.Response<T> readNext(CicsCrudRepository<Object, Object> repository, T into,
+                                                    Object ridfld, Integer length) {
+        if (repository == null) {
+            return response(16, 1, into);
+        }
+        BrowseState state = BROWSE_STATES.get(browseKey(repository));
         if (state == null) {
             return response(16, 2, into);
         }
-        List<Object> keys = snapshotKeys(file);
+        List<Object> keys = snapshotKeys(repository);
         if (state.nextIndex < 0 || state.nextIndex >= keys.size()) {
             return response(20, 1, into);
         }
         Object key = keys.get(state.nextIndex);
         state.nextIndex++;
         state.currentKey = key;
-        return CicsUtil.read(file, into, key, length);
+        return read(repository, into, key);
     }
 
-    public static <T> CicsUtil.Response<T> readPrev(String file, T into, Object ridfld, Integer length) {
-        BrowseState state = BROWSE_STATES.get(file);
+    public static <T> CicsUtil.Response<T> readPrev(CicsCrudRepository<Object, Object> repository, T into,
+                                                    Object ridfld, Integer length) {
+        if (repository == null) {
+            return response(16, 1, into);
+        }
+        BrowseState state = BROWSE_STATES.get(browseKey(repository));
         if (state == null) {
             return response(16, 2, into);
         }
-        List<Object> keys = snapshotKeys(file);
+        List<Object> keys = snapshotKeys(repository);
         int targetIndex = state.nextIndex - 1;
         if (targetIndex < 0 || targetIndex >= keys.size()) {
             return response(20, 1, into);
@@ -69,37 +80,51 @@ public final class CicsBrowseUtil {
         Object key = keys.get(targetIndex);
         state.nextIndex = targetIndex;
         state.currentKey = key;
-        return CicsUtil.read(file, into, key, length);
+        return read(repository, into, key);
     }
 
-    public static Object currentKey(String file) {
-        BrowseState state = BROWSE_STATES.get(file);
+    public static Object currentKey(CicsCrudRepository<Object, Object> repository) {
+        BrowseState state = repository == null ? null : BROWSE_STATES.get(browseKey(repository));
         return state == null ? null : state.currentKey;
     }
 
-    public static CicsUtil.Response<Void> endBrowse(String file) {
-        if (file != null) {
-            BROWSE_STATES.remove(file);
+    public static CicsUtil.Response<Void> endBrowse(CicsCrudRepository<Object, Object> repository) {
+        if (repository != null) {
+            BROWSE_STATES.remove(browseKey(repository));
         }
         return response(0, 0, null);
     }
 
-    @SuppressWarnings("unchecked")
-    private static List<Object> snapshotKeys(String file) {
+    private static List<Object> snapshotKeys(CicsCrudRepository<Object, Object> repository) {
         try {
-            Field field = CicsUtil.class.getDeclaredField("VSAM_FILES");
-            field.setAccessible(true);
-            Map<String, Map<Object, Object>> files = (Map<String, Map<Object, Object>>) field.get(null);
-            Map<Object, Object> store = files.get(file);
-            if (store == null || store.isEmpty()) {
-                return List.of();
-            }
-            List<Object> keys = new ArrayList<>(store.keySet());
+            @SuppressWarnings("unchecked")
+            List<Object> keys = new ArrayList<>((List<Object>) repository.getClass()
+                    .getMethod("browseKeys")
+                    .invoke(repository));
             keys.sort(KEY_COMPARATOR);
             return keys;
         } catch (Exception e) {
             return List.of();
         }
+    }
+
+    private static <T> CicsUtil.Response<T> read(CicsCrudRepository<Object, Object> repository, T into, Object key) {
+        try {
+            Optional<Object> stored = repository.read(key);
+            if (stored == null || stored.isEmpty()) {
+                return response(13, 1, into);
+            }
+            if (into != null) {
+                Util.copy(stored.get(), into);
+            }
+            return response(0, 0, into);
+        } catch (CicsDataAccessException e) {
+            return response(16, 9, into);
+        }
+    }
+
+    private static String browseKey(CicsCrudRepository<Object, Object> repository) {
+        return repository.getClass().getName();
     }
 
     private static int resolveStartPosition(List<Object> keys, Object key, boolean gteq, boolean equal,
