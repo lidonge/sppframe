@@ -3,7 +3,6 @@ package free.cobol2java.java;
 import free.cobol2java.cics.CicsCrudRepository;
 import free.cobol2java.cics.CicsDataAccessException;
 
-import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -21,16 +20,15 @@ public final class CicsBrowseUtil {
     private CicsBrowseUtil() {
     }
 
-    public static CicsUtil.Response<Void> startBrowse(CicsCrudRepository<Object, Object> repository, Object ridfld,
-                                                      boolean gteq) {
-        return startBrowse(repository, ridfld, gteq, !gteq, false, null);
+    public static void startBrowse(CicsCrudRepository<Object, Object> repository, Object ridfld, boolean gteq) {
+        startBrowse(repository, ridfld, gteq, !gteq, false, null);
     }
 
-    public static CicsUtil.Response<Void> startBrowse(CicsCrudRepository<Object, Object> repository, Object ridfld,
-                                                      boolean gteq, boolean equal,
-                                                      boolean generic, Integer keyLength) {
+    public static void startBrowse(CicsCrudRepository<Object, Object> repository, Object ridfld,
+                                   boolean gteq, boolean equal, boolean generic, Integer keyLength) {
         if (repository == null) {
-            return response(16, 1, null);
+            CicsUtil.setStatus(16, 1);
+            return;
         }
         List<Object> keys = snapshotKeys(repository);
         Object normalizedKey = normalizeKey(ridfld);
@@ -38,49 +36,56 @@ public final class CicsBrowseUtil {
         String browseKey = browseKey(repository);
         if (position < 0) {
             BROWSE_STATES.remove(browseKey);
-            return response(13, 1, null);
+            CicsUtil.setStatus(13, 1);
+            return;
         }
         BROWSE_STATES.put(browseKey, new BrowseState(position));
-        return response(0, 0, null);
+        CicsUtil.setStatus(0, 0);
     }
 
-    public static <T> CicsUtil.Response<T> readNext(CicsCrudRepository<Object, Object> repository, T into,
-                                                    Object ridfld, Integer length) {
+    public static <T> void readNext(CicsCrudRepository<Object, Object> repository, T into,
+                                    Object ridfld, Integer length) {
         if (repository == null) {
-            return response(16, 1, into);
+            CicsUtil.setStatus(16, 1);
+            return;
         }
         BrowseState state = BROWSE_STATES.get(browseKey(repository));
         if (state == null) {
-            return response(16, 2, into);
+            CicsUtil.setStatus(16, 2);
+            return;
         }
         List<Object> keys = snapshotKeys(repository);
         if (state.nextIndex < 0 || state.nextIndex >= keys.size()) {
-            return response(20, 1, into);
+            CicsUtil.setStatus(20, 1);
+            return;
         }
         Object key = keys.get(state.nextIndex);
         state.nextIndex++;
         state.currentKey = key;
-        return read(repository, into, key);
+        read(repository, into, key);
     }
 
-    public static <T> CicsUtil.Response<T> readPrev(CicsCrudRepository<Object, Object> repository, T into,
-                                                    Object ridfld, Integer length) {
+    public static <T> void readPrev(CicsCrudRepository<Object, Object> repository, T into,
+                                    Object ridfld, Integer length) {
         if (repository == null) {
-            return response(16, 1, into);
+            CicsUtil.setStatus(16, 1);
+            return;
         }
         BrowseState state = BROWSE_STATES.get(browseKey(repository));
         if (state == null) {
-            return response(16, 2, into);
+            CicsUtil.setStatus(16, 2);
+            return;
         }
         List<Object> keys = snapshotKeys(repository);
         int targetIndex = state.nextIndex - 1;
         if (targetIndex < 0 || targetIndex >= keys.size()) {
-            return response(20, 1, into);
+            CicsUtil.setStatus(20, 1);
+            return;
         }
         Object key = keys.get(targetIndex);
         state.nextIndex = targetIndex;
         state.currentKey = key;
-        return read(repository, into, key);
+        read(repository, into, key);
     }
 
     public static Object currentKey(CicsCrudRepository<Object, Object> repository) {
@@ -88,11 +93,11 @@ public final class CicsBrowseUtil {
         return state == null ? null : state.currentKey;
     }
 
-    public static CicsUtil.Response<Void> endBrowse(CicsCrudRepository<Object, Object> repository) {
+    public static void endBrowse(CicsCrudRepository<Object, Object> repository) {
         if (repository != null) {
             BROWSE_STATES.remove(browseKey(repository));
         }
-        return response(0, 0, null);
+        CicsUtil.setStatus(0, 0);
     }
 
     private static List<Object> snapshotKeys(CicsCrudRepository<Object, Object> repository) {
@@ -108,18 +113,19 @@ public final class CicsBrowseUtil {
         }
     }
 
-    private static <T> CicsUtil.Response<T> read(CicsCrudRepository<Object, Object> repository, T into, Object key) {
+    private static <T> void read(CicsCrudRepository<Object, Object> repository, T into, Object key) {
         try {
             Optional<Object> stored = repository.read(key);
             if (stored == null || stored.isEmpty()) {
-                return response(13, 1, into);
+                CicsUtil.setStatus(13, 1);
+                return;
             }
             if (into != null) {
                 Util.copy(stored.get(), into);
             }
-            return response(0, 0, into);
+            CicsUtil.setStatus(0, 0);
         } catch (CicsDataAccessException e) {
-            return response(16, 9, into);
+            CicsUtil.setStatus(16, 9);
         }
     }
 
@@ -192,19 +198,6 @@ public final class CicsBrowseUtil {
             return comparable.compareTo(right);
         }
         return String.valueOf(left).compareTo(String.valueOf(right));
-    }
-
-    private static <T> CicsUtil.Response<T> response(int resp, int resp2, T payload) {
-        try {
-            Constructor<CicsUtil.Response> constructor = CicsUtil.Response.class
-                    .getDeclaredConstructor(int.class, int.class, Object.class);
-            constructor.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            CicsUtil.Response<T> result = constructor.newInstance(resp, resp2, payload);
-            return result;
-        } catch (Exception e) {
-            throw new IllegalStateException("Unable to create CICS browse response", e);
-        }
     }
 
     private static final Comparator<Object> KEY_COMPARATOR = CicsBrowseUtil::compareKeys;

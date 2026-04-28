@@ -15,49 +15,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class CicsUtil {
     private static final Map<String, Object> MAP_BUFFERS = new ConcurrentHashMap<>();
     private static final Map<String, String> TEXT_BUFFERS = new ConcurrentHashMap<>();
+    private static final ThreadLocal<CicsStatus> LAST_STATUS = ThreadLocal.withInitial(CicsStatus::ok);
 
     private CicsUtil() {
-    }
-
-    public static final class Response<T> {
-        private final int resp;
-        private final int resp2;
-        private final T payload;
-        private final String returnMsg;
-
-        private Response(int resp, int resp2, T payload) {
-            this(resp, resp2, payload, null);
-        }
-
-        private Response(int resp, int resp2, T payload, String returnMsg) {
-            this.resp = resp;
-            this.resp2 = resp2;
-            this.payload = payload;
-            this.returnMsg = returnMsg;
-        }
-
-        public int getResp() {
-            return resp;
-        }
-
-        public int getResp2() {
-            return resp2;
-        }
-
-        public T getPayload() {
-            return payload;
-        }
-
-        public String getReturnMsg() {
-            return returnMsg;
-        }
-
-        @Override
-        public String toString() {
-            return "Response [resp=" + resp + ", resp2=" + resp2 + ", payload=" + payload
-                    + ", returnMsg=" + returnMsg + "]";
-        }
-
     }
 
     public interface CicsMap<T> {
@@ -100,23 +60,24 @@ public final class CicsUtil {
         
     }
 
-    public static Response<Void> sendMap(String map, String mapset, Object from, boolean erase) {
+    public static void sendMap(String map, String mapset, Object from, boolean erase) {
         String key = terminalKey(map, mapset);
         if (erase) {
             MAP_BUFFERS.remove(key);
         }
         MAP_BUFFERS.put(key, deepCopy(from));
-        return ok(null);
+        setStatus(0, 0, null);
     }
 
-    public static Response<Void> sendMap(CicsMap<?> request, boolean erase) {
+    public static void sendMap(CicsMap<?> request, boolean erase) {
         if (request == null) {
-            return error(16, 1, null);
+            setStatus(16, 1, null);
+            return;
         }
-        return sendMap(request.getMapName(), request.getMapSetName(), request.getPayload(), erase);
+        sendMap(request.getMapName(), request.getMapSetName(), request.getPayload(), erase);
     }
 
-    public static Response<Void> sendText(String text, Integer length, boolean erase) {
+    public static String sendText(String text, Integer length, boolean erase) {
         String value = text == null ? "" : text;
         if (length != null && length >= 0 && length < value.length()) {
             value = value.substring(0, length);
@@ -125,19 +86,38 @@ public final class CicsUtil {
             TEXT_BUFFERS.clear();
         }
         TEXT_BUFFERS.put("TEXT", value);
-        return new Response<>(0, 0, null, value);
+        setStatus(0, 0, value);
+        return value;
     }
 
-    public static Response<Void> returnControl() {
-        return ok(null);
+    public static void returnControl() {
+        setStatus(0, 0, null);
     }
 
-    private static <T> Response<T> ok(T payload) {
-        return new Response<>(0, 0, payload);
+    public static int getResp() {
+        return LAST_STATUS.get().resp;
     }
 
-    private static <T> Response<T> error(int resp, int resp2, T payload) {
-        return new Response<>(resp, resp2, payload);
+    public static int getResp2() {
+        return LAST_STATUS.get().resp2;
+    }
+
+    public static String getReturnMsg() {
+        return LAST_STATUS.get().returnMsg;
+    }
+
+    static void setStatus(int resp, int resp2) {
+        setStatus(resp, resp2, null);
+    }
+
+    static void setStatus(int resp, int resp2, String returnMsg) {
+        LAST_STATUS.set(new CicsStatus(resp, resp2, returnMsg));
+    }
+
+    private record CicsStatus(int resp, int resp2, String returnMsg) {
+        private static CicsStatus ok() {
+            return new CicsStatus(0, 0, null);
+        }
     }
 
     private static String terminalKey(String map, String mapset) {

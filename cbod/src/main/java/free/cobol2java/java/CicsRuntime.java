@@ -63,17 +63,17 @@ public final class CicsRuntime {
         return START_REQUESTS.isEmpty() ? null : START_REQUESTS.get(START_REQUESTS.size() - 1);
     }
 
-    public static synchronized CicsUtil.Response<Void> returnControl(String transid, Object commarea, Integer length) {
+    public static synchronized void returnControl(String transid, Object commarea, Integer length) {
         RETURN_REQUESTS.add(new ReturnRequest(transid, commarea, length));
-        return CicsUtil.returnControl();
+        CicsUtil.returnControl();
     }
 
-    public static synchronized CicsUtil.Response<Void> syncpoint() {
-        return CicsUtil.returnControl();
+    public static synchronized void syncpoint() {
+        CicsUtil.returnControl();
     }
 
-    public static synchronized CicsUtil.Response<Void> syncpointRollback() {
-        return CicsUtil.returnControl();
+    public static synchronized void syncpointRollback() {
+        CicsUtil.returnControl();
     }
 
     public static synchronized void clearReturnRequests() {
