@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,6 +41,26 @@ public final class SqlRuntime {
         Object fromContextLoader = invokeSpringContext(beanType);
         if (beanType.isInstance(fromContextLoader)) {
             return (T) fromContextLoader;
+        }
+        Object constructed = constructWithBeanConstructor(beanType);
+        if (beanType.isInstance(constructed)) {
+            return (T) constructed;
+        }
+        return null;
+    }
+
+    private static Object constructWithBeanConstructor(Class<?> beanType) {
+        try {
+            for (Constructor<?> constructor : beanType.getConstructors()) {
+                Class<?>[] parameterTypes = constructor.getParameterTypes();
+                if (parameterTypes.length == 1) {
+                    Object dependency = beanByType(parameterTypes[0]);
+                    if (dependency != null) {
+                        return constructor.newInstance(dependency);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
         }
         return null;
     }
@@ -127,7 +148,9 @@ public final class SqlRuntime {
     }
 
     public static String currentTimestamp() {
-        return java.time.LocalDateTime.now().toString();
+        return java.time.LocalDateTime.now()
+                .truncatedTo(java.time.temporal.ChronoUnit.MILLIS)
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"));
     }
 
     public static void prepare(String statementName, Object sqlSource) {
