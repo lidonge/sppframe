@@ -34,11 +34,17 @@ public final class CicsUtil {
         private final int resp;
         private final int resp2;
         private final T payload;
+        private final String returnMsg;
 
         private Response(int resp, int resp2, T payload) {
+            this(resp, resp2, payload, null);
+        }
+
+        private Response(int resp, int resp2, T payload, String returnMsg) {
             this.resp = resp;
             this.resp2 = resp2;
             this.payload = payload;
+            this.returnMsg = returnMsg;
         }
 
         public int getResp() {
@@ -53,9 +59,14 @@ public final class CicsUtil {
             return payload;
         }
 
+        public String getReturnMsg() {
+            return returnMsg;
+        }
+
         @Override
         public String toString() {
-            return "Response [resp=" + resp + ", resp2=" + resp2 + ", payload=" + payload + "]";
+            return "Response [resp=" + resp + ", resp2=" + resp2 + ", payload=" + payload
+                    + ", returnMsg=" + returnMsg + "]";
         }
 
     }
@@ -197,7 +208,7 @@ public final class CicsUtil {
             TEXT_BUFFERS.clear();
         }
         TEXT_BUFFERS.put("TEXT", value);
-        return ok(null);
+        return new Response<>(0, 0, null, value);
     }
 
     public static Response<Void> write(String file, Object from, Object ridfld, Integer length) {
