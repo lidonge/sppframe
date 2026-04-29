@@ -4,6 +4,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Runtime hooks for converted LINK/START commands.
@@ -11,6 +13,10 @@ import java.util.List;
 public final class CicsRuntime {
     private static final List<StartRequest> START_REQUESTS = new ArrayList<>();
     private static final List<ReturnRequest> RETURN_REQUESTS = new ArrayList<>();
+    private static final Map<String, Object> COMMON_WORK_AREAS = new ConcurrentHashMap<>();
+    private static final ThreadLocal<Map<String, Object>> CURRENT_COMMON_WORK_AREAS =
+            ThreadLocal.withInitial(ConcurrentHashMap::new);
+    private static final ThreadLocal<CicsStatus> LAST_STATUS = ThreadLocal.withInitial(CicsStatus::ok);
 
     private CicsRuntime() {
     }
@@ -55,6 +61,38 @@ public final class CicsRuntime {
         }
     }
 
+    public static <T> T getCommonWorkArea(String name, Class<T> type) {
+        if (type == null) {
+            throw new IllegalArgumentException("Common work area type must not be null.");
+        }
+        String key = commonWorkAreaKey(name, type);
+        Object value = COMMON_WORK_AREAS.computeIfAbsent(key, ignored -> newInstance(type));
+        CURRENT_COMMON_WORK_AREAS.get().put(key, value);
+        return type.cast(value);
+    }
+
+    public static void saveCommonWorkArea(String name, Object value) {
+        if (value == null) {
+            return;
+        }
+        String key = commonWorkAreaKey(name, value.getClass());
+        COMMON_WORK_AREAS.put(key, value);
+        CURRENT_COMMON_WORK_AREAS.get().put(key, value);
+    }
+
+    public static void saveCurrentCommonWorkAreas() {
+        COMMON_WORK_AREAS.putAll(CURRENT_COMMON_WORK_AREAS.get());
+    }
+
+    public static Map<String, Object> getCommonWorkAreaStore() {
+        return COMMON_WORK_AREAS;
+    }
+
+    public static void clearCommonWorkAreas() {
+        COMMON_WORK_AREAS.clear();
+        CURRENT_COMMON_WORK_AREAS.remove();
+    }
+
     public static synchronized void clearStartedTransactions() {
         START_REQUESTS.clear();
     }
@@ -65,15 +103,17 @@ public final class CicsRuntime {
 
     public static synchronized void returnControl(String transid, Object commarea, Integer length) {
         RETURN_REQUESTS.add(new ReturnRequest(transid, commarea, length));
-        CicsUtil.returnControl();
+        returnControl();
     }
 
     public static synchronized void syncpoint() {
-        CicsUtil.returnControl();
+        saveCurrentCommonWorkAreas();
+        setStatus(0, 0);
     }
 
     public static synchronized void syncpointRollback() {
-        CicsUtil.returnControl();
+        CURRENT_COMMON_WORK_AREAS.remove();
+        setStatus(0, 0);
     }
 
     public static synchronized void clearReturnRequests() {
@@ -82,6 +122,23 @@ public final class CicsRuntime {
 
     public static synchronized ReturnRequest peekLastReturnRequest() {
         return RETURN_REQUESTS.isEmpty() ? null : RETURN_REQUESTS.get(RETURN_REQUESTS.size() - 1);
+    }
+
+    public static void returnControl() {
+        saveCurrentCommonWorkAreas();
+        setStatus(0, 0);
+    }
+
+    public static int getResp() {
+        return LAST_STATUS.get().resp;
+    }
+
+    public static int getResp2() {
+        return LAST_STATUS.get().resp2;
+    }
+
+    static void setStatus(int resp, int resp2) {
+        LAST_STATUS.set(new CicsStatus(resp, resp2));
     }
 
     private static Method findLinkProcedure(Class<?> serviceClass) {
@@ -113,6 +170,19 @@ public final class CicsRuntime {
         return target;
     }
 
+    private static String commonWorkAreaKey(String name, Class<?> type) {
+        String actualName = name == null || name.isBlank() ? "CWA" : name.trim();
+        return actualName + ":" + type.getName();
+    }
+
+    private static Object newInstance(Class<?> type) {
+        try {
+            return type.getDeclaredConstructor().newInstance();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to create CICS common work area " + type.getName(), e);
+        }
+    }
+
     private static Object adaptLength(Integer length, Class<?> targetType) {
         if (length == null || targetType == null || targetType.isInstance(length)) {
             return length;
@@ -138,6 +208,51 @@ public final class CicsRuntime {
                 targetField.set(target, sourceField.get(source));
             } catch (Exception ignored) {
             }
+        }
+    }
+
+    public interface CicsMap<T> {
+        String getMapName();
+
+        String getMapSetName();
+
+        default java.util.List<BmsFieldMeta> getFields() {
+            return java.util.List.of();
+        }
+
+        T getPayload();
+
+        void setPayload(T payload);
+    }
+
+    public static final class BmsFieldMeta {
+        public final String name;
+        public final Integer row;
+        public final Integer column;
+        public final Integer length;
+        public final String initialValue;
+        public final java.util.List<String> attributes;
+
+        public BmsFieldMeta(String name, Integer row, Integer column, Integer length, String initialValue,
+                            java.util.List<String> attributes) {
+            this.name = name;
+            this.row = row;
+            this.column = column;
+            this.length = length;
+            this.initialValue = initialValue;
+            this.attributes = attributes;
+        }
+
+        @Override
+        public String toString() {
+            return "BmsFieldMeta [name=" + name + ", row=" + row + ", column=" + column + ", length=" + length
+                    + ", initialValue=" + initialValue + ", attributes=" + attributes + "]";
+        }
+    }
+
+    private record CicsStatus(int resp, int resp2) {
+        private static CicsStatus ok() {
+            return new CicsStatus(0, 0);
         }
     }
 
