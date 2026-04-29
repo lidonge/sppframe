@@ -20,8 +20,9 @@ public final class IdcamsRuntime {
             return 8;
         }
         try {
+            VsamStorageCatalog catalog = VsamStorageCatalog.from(step);
             for (String command : controlStatements(step.dd("SYSIN"))) {
-                executeCommand(step, command);
+                executeCommand(step, catalog, command);
             }
             return 0;
         } catch (IllegalArgumentException e) {
@@ -31,7 +32,7 @@ public final class IdcamsRuntime {
         }
     }
 
-    private static void executeCommand(JclStep step, String command) throws IOException {
+    private static void executeCommand(JclStep step, VsamStorageCatalog catalog, String command) throws IOException {
         String upper = command.toUpperCase(Locale.ROOT);
         if (upper.startsWith("DEFINE ") && upper.contains(" GDG")) {
             String name = nameValue(command);
@@ -41,12 +42,22 @@ public final class IdcamsRuntime {
             JclDatasetRuntime.defineGdg(name);
             return;
         }
+        if (upper.startsWith("DEFINE ") && upper.contains(" CLUSTER")) {
+            defineCluster(catalog, command);
+            return;
+        }
         if (upper.startsWith("DELETE ")) {
-            JclDatasetRuntime.deleteDataSet(firstOperand(command, "DELETE"));
+            String datasetName = firstOperand(command, "DELETE");
+            if (!catalog.isDatabaseBacked(datasetName)) {
+                JclDatasetRuntime.deleteDataSet(datasetName);
+            }
             return;
         }
         if (upper.startsWith("LISTCAT")) {
             String name = nameValue(command);
+            if (catalog.isDatabaseBacked(name)) {
+                return;
+            }
             if (name != null && !JclDatasetRuntime.exists(name)) {
                 throw new IOException("IDCAMS LISTCAT data set not found: " + name);
             }
@@ -56,11 +67,22 @@ public final class IdcamsRuntime {
             return;
         }
         if (upper.startsWith("REPRO ")) {
-            repro(step, command);
+            repro(step, catalog, command);
         }
     }
 
-    private static void repro(JclStep step, String command) throws IOException {
+    private static void defineCluster(VsamStorageCatalog catalog, String command) throws IOException {
+        String name = nameValue(command);
+        if (name == null) {
+            throw new IllegalArgumentException("Missing IDCAMS DEFINE CLUSTER NAME");
+        }
+        if (catalog.isDatabaseBacked(name)) {
+            return;
+        }
+        JclDatasetRuntime.resolveDataSetName(name);
+    }
+
+    private static void repro(JclStep step, VsamStorageCatalog catalog, String command) throws IOException {
         Matcher matcher = REPRO_FILES.matcher(command);
         if (!matcher.find()) {
             throw new IllegalArgumentException("Unsupported IDCAMS REPRO command: " + command);
@@ -69,6 +91,10 @@ public final class IdcamsRuntime {
         JclDd output = step.dd(matcher.group(2).trim());
         if (input == null || output == null) {
             throw new IllegalArgumentException("Missing IDCAMS REPRO DD: " + command);
+        }
+        String outputDsn = JclDatasetRuntime.parameter(output, "DSN");
+        if (catalog.isDatabaseBacked(outputDsn)) {
+            return;
         }
         JclDatasetRuntime.writeBytes(output, JclDatasetRuntime.readBytes(input));
     }
