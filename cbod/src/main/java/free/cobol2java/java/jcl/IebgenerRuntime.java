@@ -8,22 +8,22 @@ public final class IebgenerRuntime {
 
     public static int execute(JclStep step) {
         if (step == null) {
-            return 8;
+            return JclReturnCodes.ERROR;
         }
         if (!hasSupportedSysin(step.dd("SYSIN"))) {
-            return 8;
+            return JclReturnCodes.ERROR;
         }
         JclDd input = step.dd("SYSUT1");
         JclDd output = step.dd("SYSUT2");
         if (input == null || output == null) {
-            return 8;
+            return JclReturnCodes.ERROR;
         }
         try {
             byte[] content = JclDatasetRuntime.readBytes(input);
             JclDatasetRuntime.writeBytes(output, content);
-            return 0;
+            return JclReturnCodes.OK;
         } catch (IOException e) {
-            return 12;
+            return JclReturnCodes.SEVERE_ERROR;
         }
     }
 

@@ -11,7 +11,7 @@ public abstract class AbstractJclJob {
 
     protected int runJob(String jobName, JclStepAction action) throws Exception {
         stepReturnCodes.clear();
-        jobRc = 0;
+        jobRc = JclReturnCodes.OK;
         JclDatasetRuntime.beginJob(jobName);
         try {
             return action.run();
@@ -22,8 +22,7 @@ public abstract class AbstractJclJob {
 
     protected int runStep(JclStep step, JclStepAction action) throws Exception {
         if (shouldSkip(step)) {
-            stepReturnCodes.put(step.getName(), 0);
-            return 0;
+            return JclReturnCodes.OK;
         }
         int rc = action.run();
         stepReturnCodes.put(step.getName(), rc);

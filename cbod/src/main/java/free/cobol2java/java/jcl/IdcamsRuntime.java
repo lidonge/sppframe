@@ -17,18 +17,18 @@ public final class IdcamsRuntime {
 
     public static int execute(JclStep step) {
         if (step == null) {
-            return 8;
+            return JclReturnCodes.ERROR;
         }
         try {
             VsamStorageCatalog catalog = VsamStorageCatalog.from(step);
             for (String command : controlStatements(step.dd("SYSIN"))) {
                 executeCommand(step, catalog, command);
             }
-            return 0;
+            return JclReturnCodes.OK;
         } catch (IllegalArgumentException e) {
-            return 8;
+            return JclReturnCodes.ERROR;
         } catch (IOException e) {
-            return 12;
+            return JclReturnCodes.SEVERE_ERROR;
         }
     }
 

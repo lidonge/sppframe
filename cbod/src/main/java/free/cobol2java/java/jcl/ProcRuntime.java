@@ -5,6 +5,6 @@ public final class ProcRuntime {
     }
 
     public static int execute(JclStep step) {
-        return 0;
+        return JclReturnCodes.OK;
     }
 }

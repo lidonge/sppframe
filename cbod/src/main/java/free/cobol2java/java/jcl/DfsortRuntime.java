@@ -26,11 +26,11 @@ public final class DfsortRuntime {
 
     public static int execute(JclStep step) {
         if (step == null) {
-            return 8;
+            return JclReturnCodes.ERROR;
         }
         JclDd input = firstDd(step, "SORTIN", "SYSUT1");
         if (input == null) {
-            return 8;
+            return JclReturnCodes.ERROR;
         }
         try {
             SortControl control = parseControl(step.dd("SYSIN"));
@@ -43,7 +43,7 @@ public final class DfsortRuntime {
             if (control.outfils.isEmpty()) {
                 JclDd output = firstDd(step, "SORTOUT", "SYSUT2");
                 if (output == null) {
-                    return 8;
+                    return JclReturnCodes.ERROR;
                 }
                 writeOutput(output, records);
             } else {
@@ -54,17 +54,17 @@ public final class DfsortRuntime {
                     for (String ddName : outfil.ddNames) {
                         JclDd output = step.dd(ddName);
                         if (output == null) {
-                            return 8;
+                            return JclReturnCodes.ERROR;
                         }
                         writeOutput(output, outRecords);
                     }
                 }
             }
-            return 0;
+            return JclReturnCodes.OK;
         } catch (IllegalArgumentException e) {
-            return 8;
+            return JclReturnCodes.ERROR;
         } catch (IOException e) {
-            return 12;
+            return JclReturnCodes.SEVERE_ERROR;
         }
     }
 

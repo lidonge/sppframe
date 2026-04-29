@@ -38,10 +38,10 @@ public final class CobolProgramInvoker {
         }
         Object result = service.execute((Object[]) (args == null ? new String[0] : args));
         Integer returnCode = ServiceManager.getReturnCode(service);
-        if ((returnCode == null || returnCode == 0) && result instanceof Number number) {
+        if ((returnCode == null || returnCode == JclReturnCodes.OK) && result instanceof Number number) {
             return number.intValue();
         }
-        return returnCode == null ? 0 : returnCode;
+        return returnCode == null ? JclReturnCodes.OK : returnCode;
     }
 
     private static String resolveServiceName(JclStep step) {

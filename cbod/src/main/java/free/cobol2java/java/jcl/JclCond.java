@@ -33,7 +33,11 @@ public class JclCond {
     }
 
     public boolean matches(Map<String, Integer> stepReturnCodes, int jobRc) {
-        int actual = stepName == null ? jobRc : stepReturnCodes.getOrDefault(stepName, 0);
+        Integer actualRc = stepName == null ? Integer.valueOf(jobRc) : stepReturnCodes.get(stepName);
+        if (actualRc == null) {
+            return false;
+        }
+        int actual = actualRc;
         return switch (operator) {
             case "LT" -> code < actual;
             case "LE" -> code <= actual;
