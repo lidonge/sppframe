@@ -1,7 +1,9 @@
 package free.cobol2java.java.jcl;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class JclStep {
     private final String name;
@@ -9,6 +11,7 @@ public class JclStep {
     private String proc;
     private String parm;
     private JclCond cond;
+    private final Map<String, String> parameters = new LinkedHashMap<>();
     private final List<JclDd> dds = new ArrayList<>();
 
     private JclStep(String name) {
@@ -39,6 +42,11 @@ public class JclStep {
         return this;
     }
 
+    public JclStep param(String key, String value) {
+        parameters.put(key, value);
+        return this;
+    }
+
     public JclStep dd(JclDd dd) {
         dds.add(dd);
         return this;
@@ -66,6 +74,10 @@ public class JclStep {
 
     public JclCond getCond() {
         return cond;
+    }
+
+    public Map<String, String> getParameters() {
+        return Map.copyOf(parameters);
     }
 
     public List<JclDd> getDds() {
