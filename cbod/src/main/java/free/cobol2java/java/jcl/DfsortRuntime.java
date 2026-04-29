@@ -75,7 +75,7 @@ public final class DfsortRuntime {
         if (!dd.getInlineData().isEmpty()) {
             return new ArrayList<>(dd.getInlineData());
         }
-        Path path = dataSetPath(dd);
+        Path path = JclDatasetRuntime.dataSetPath(dd);
         if (path == null) {
             throw new IOException("Missing DFSORT input data set");
         }
@@ -89,7 +89,7 @@ public final class DfsortRuntime {
         if (dd == null || isDummy(dd)) {
             return;
         }
-        Path path = dataSetPath(dd);
+        Path path = JclDatasetRuntime.dataSetPath(dd);
         if (path == null) {
             throw new IOException("Missing DFSORT output data set");
         }
@@ -210,7 +210,7 @@ public final class DfsortRuntime {
         if (!sysin.getInlineData().isEmpty()) {
             lines = sysin.getInlineData();
         } else {
-            Path path = dataSetPath(sysin);
+            Path path = JclDatasetRuntime.dataSetPath(sysin);
             if (path == null) {
                 return List.of();
             }

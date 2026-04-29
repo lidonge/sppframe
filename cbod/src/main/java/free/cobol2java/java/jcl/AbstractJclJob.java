@@ -12,7 +12,12 @@ public abstract class AbstractJclJob {
     protected int runJob(String jobName, JclStepAction action) throws Exception {
         stepReturnCodes.clear();
         jobRc = 0;
-        return action.run();
+        JclDatasetRuntime.beginJob(jobName);
+        try {
+            return action.run();
+        } finally {
+            JclDatasetRuntime.endJob();
+        }
     }
 
     protected int runStep(JclStep step, JclStepAction action) throws Exception {
