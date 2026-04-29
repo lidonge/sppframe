@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Runtime hooks for converted LINK/START commands.
@@ -15,9 +16,11 @@ public final class CicsRuntime {
     private static final List<ReturnRequest> RETURN_REQUESTS = new ArrayList<>();
     private static final Map<String, Object> COMMON_WORK_AREAS = new ConcurrentHashMap<>();
     private static final Map<String, Object> LOADED_PROGRAMS = new ConcurrentHashMap<>();
+    private static final Map<String, ReentrantLock> LOCAL_RESOURCE_LOCKS = new ConcurrentHashMap<>();
     private static final ThreadLocal<Map<String, Object>> CURRENT_COMMON_WORK_AREAS =
             ThreadLocal.withInitial(ConcurrentHashMap::new);
     private static final ThreadLocal<CicsStatus> LAST_STATUS = ThreadLocal.withInitial(CicsStatus::ok);
+    private static volatile DistributedLock distributedLock = new LocalDistributedLock();
 
     private CicsRuntime() {
     }
@@ -70,6 +73,29 @@ public final class CicsRuntime {
         Object value = COMMON_WORK_AREAS.computeIfAbsent(key, ignored -> newInstance(type));
         CURRENT_COMMON_WORK_AREAS.get().put(key, value);
         return type.cast(value);
+    }
+
+    public static void enq(Object resource) {
+        distributedLock.lock(resourceKey(resource));
+        setStatus(0, 0);
+    }
+
+    public static void deq(Object resource) {
+        distributedLock.unlock(resourceKey(resource));
+        setStatus(0, 0);
+    }
+
+    public static DistributedLock getDistributedLock() {
+        return distributedLock;
+    }
+
+    public static void setDistributedLock(DistributedLock lock) {
+        distributedLock = lock == null ? new LocalDistributedLock() : lock;
+    }
+
+    public static void resetDistributedLock() {
+        distributedLock = new LocalDistributedLock();
+        LOCAL_RESOURCE_LOCKS.clear();
     }
 
     public static void saveCommonWorkArea(String name, Object value) {
@@ -206,6 +232,10 @@ public final class CicsRuntime {
         return actualProgram + ":" + type.getName();
     }
 
+    private static String resourceKey(Object resource) {
+        return resource == null ? "" : String.valueOf(resource).trim();
+    }
+
     private static Object newInstance(Class<?> type) {
         try {
             return type.getDeclaredConstructor().newInstance();
@@ -254,6 +284,28 @@ public final class CicsRuntime {
         T getPayload();
 
         void setPayload(T payload);
+    }
+
+    public interface DistributedLock {
+        void lock(String resource);
+
+        void unlock(String resource);
+    }
+
+    private static final class LocalDistributedLock implements DistributedLock {
+        @Override
+        public void lock(String resource) {
+            LOCAL_RESOURCE_LOCKS.computeIfAbsent(resource, ignored -> new ReentrantLock()).lock();
+        }
+
+        @Override
+        public void unlock(String resource) {
+            ReentrantLock lock = LOCAL_RESOURCE_LOCKS.get(resource);
+            if (lock == null) {
+                return;
+            }
+            lock.unlock();
+        }
     }
 
     public static final class BmsFieldMeta {
