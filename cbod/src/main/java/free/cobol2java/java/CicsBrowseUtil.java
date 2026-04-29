@@ -27,7 +27,7 @@ public final class CicsBrowseUtil {
     public static void startBrowse(CicsCrudRepository<Object, Object> repository, Object ridfld,
                                    boolean gteq, boolean equal, boolean generic, Integer keyLength) {
         if (repository == null) {
-            CicsUtil.setStatus(16, 1);
+            CicsRuntime.setStatus(16, 1);
             return;
         }
         List<Object> keys = snapshotKeys(repository);
@@ -36,27 +36,27 @@ public final class CicsBrowseUtil {
         String browseKey = browseKey(repository);
         if (position < 0) {
             BROWSE_STATES.remove(browseKey);
-            CicsUtil.setStatus(13, 1);
+            CicsRuntime.setStatus(13, 1);
             return;
         }
         BROWSE_STATES.put(browseKey, new BrowseState(position));
-        CicsUtil.setStatus(0, 0);
+        CicsRuntime.setStatus(0, 0);
     }
 
     public static <T> void readNext(CicsCrudRepository<Object, Object> repository, T into,
                                     Object ridfld, Integer length) {
         if (repository == null) {
-            CicsUtil.setStatus(16, 1);
+            CicsRuntime.setStatus(16, 1);
             return;
         }
         BrowseState state = BROWSE_STATES.get(browseKey(repository));
         if (state == null) {
-            CicsUtil.setStatus(16, 2);
+            CicsRuntime.setStatus(16, 2);
             return;
         }
         List<Object> keys = snapshotKeys(repository);
         if (state.nextIndex < 0 || state.nextIndex >= keys.size()) {
-            CicsUtil.setStatus(20, 1);
+            CicsRuntime.setStatus(20, 1);
             return;
         }
         Object key = keys.get(state.nextIndex);
@@ -68,18 +68,18 @@ public final class CicsBrowseUtil {
     public static <T> void readPrev(CicsCrudRepository<Object, Object> repository, T into,
                                     Object ridfld, Integer length) {
         if (repository == null) {
-            CicsUtil.setStatus(16, 1);
+            CicsRuntime.setStatus(16, 1);
             return;
         }
         BrowseState state = BROWSE_STATES.get(browseKey(repository));
         if (state == null) {
-            CicsUtil.setStatus(16, 2);
+            CicsRuntime.setStatus(16, 2);
             return;
         }
         List<Object> keys = snapshotKeys(repository);
         int targetIndex = state.nextIndex - 1;
         if (targetIndex < 0 || targetIndex >= keys.size()) {
-            CicsUtil.setStatus(20, 1);
+            CicsRuntime.setStatus(20, 1);
             return;
         }
         Object key = keys.get(targetIndex);
@@ -97,7 +97,7 @@ public final class CicsBrowseUtil {
         if (repository != null) {
             BROWSE_STATES.remove(browseKey(repository));
         }
-        CicsUtil.setStatus(0, 0);
+        CicsRuntime.setStatus(0, 0);
     }
 
     private static List<Object> snapshotKeys(CicsCrudRepository<Object, Object> repository) {
@@ -117,15 +117,15 @@ public final class CicsBrowseUtil {
         try {
             Optional<Object> stored = repository.read(key);
             if (stored == null || stored.isEmpty()) {
-                CicsUtil.setStatus(13, 1);
+                CicsRuntime.setStatus(13, 1);
                 return;
             }
             if (into != null) {
                 Util.copy(stored.get(), into);
             }
-            CicsUtil.setStatus(0, 0);
+            CicsRuntime.setStatus(0, 0);
         } catch (CicsDataAccessException e) {
-            CicsUtil.setStatus(16, 9);
+            CicsRuntime.setStatus(16, 9);
         }
     }
 
