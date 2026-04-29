@@ -29,41 +29,43 @@ public final class CicsRuntime {
     private CicsRuntime() {
     }
 
-    public static synchronized void start(String transid, Object interval, Object from, Integer length,
-                                          Object reqid, Object termid) {
+    public static synchronized Response<Void> start(String transid, Object interval, Object from, Integer length,
+                                                    Object reqid, Object termid) {
         START_REQUESTS.add(new StartRequest(transid, interval, from, length, reqid, termid));
+        return status(null, 0, 0);
     }
 
-    public static void link(String program, Object commarea, Integer length) {
+    public static Response<Void> link(String program, Object commarea, Integer length) {
         IService service = ServiceManager.getService(program);
         if (service == null) {
-            return;
+            return status(null, 0, 0);
         }
         Method method = findLinkProcedure(service.getClass());
         if (method == null) {
             service.execute(commarea, length);
-            return;
+            return status(null, 0, 0);
         }
         try {
             method.setAccessible(true);
             int parameterCount = method.getParameterCount();
             if (parameterCount == 0) {
                 method.invoke(service);
-                return;
+                return status(null, 0, 0);
             }
             if (parameterCount == 1) {
                 Object adapted = adaptCommarea(commarea, method.getParameterTypes()[0]);
                 method.invoke(service, adapted);
                 copyMatchingFields(adapted, commarea);
-                return;
+                return status(null, 0, 0);
             }
             if (parameterCount == 2) {
                 Object adapted = adaptCommarea(commarea, method.getParameterTypes()[0]);
                 method.invoke(service, adapted, adaptLength(length, method.getParameterTypes()[1]));
                 copyMatchingFields(adapted, commarea);
-                return;
+                return status(null, 0, 0);
             }
             service.execute(commarea, length);
+            return status(null, 0, 0);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to execute LINK program " + program, e);
         }
@@ -79,14 +81,14 @@ public final class CicsRuntime {
         return type.cast(value);
     }
 
-    public static void enq(Object resource) {
+    public static Response<Void> enq(Object resource) {
         distributedLock.lock(resourceKey(resource));
-        setStatus(0, 0);
+        return status(null, 0, 0);
     }
 
-    public static void deq(Object resource) {
+    public static Response<Void> deq(Object resource) {
         distributedLock.unlock(resourceKey(resource));
-        setStatus(0, 0);
+        return status(null, 0, 0);
     }
 
     public static DistributedLock getDistributedLock() {
@@ -102,19 +104,17 @@ public final class CicsRuntime {
         LOCAL_RESOURCE_LOCKS.clear();
     }
 
-    public static void writeqTd(Object queue, Object value) {
+    public static Response<Void> writeqTd(Object queue, Object value) {
         cicsQueueService.writeTd(queueName(queue), value);
-        setStatus(0, 0);
+        return status(null, 0, 0);
     }
 
-    public static Object readqTd(Object queue) {
+    public static Response<Object> readqTd(Object queue) {
         Object value = cicsQueueService.readTd(queueName(queue));
         if (value == null) {
-            setStatus(13, 0);
-            return null;
+            return status(null, 13, 0);
         }
-        setStatus(0, 0);
-        return value;
+        return status(value, 0, 0);
     }
 
     public static CicsQueueService getCicsQueueService() {
@@ -144,13 +144,16 @@ public final class CicsRuntime {
     }
 
     public static <T> T loadProgram(String program, Class<T> type) {
+        return loadProgramResult(program, type).value();
+    }
+
+    public static <T> Response<T> loadProgramResult(String program, Class<T> type) {
         if (type == null) {
             throw new IllegalArgumentException("Loaded program type must not be null.");
         }
         String key = loadedProgramKey(program, type);
         Object value = LOADED_PROGRAMS.computeIfAbsent(key, ignored -> newInstance(type));
-        setStatus(0, 0);
-        return type.cast(value);
+        return status(type.cast(value), 0, 0);
     }
 
     public static void registerLoadedProgram(String program, Object value) {
@@ -185,19 +188,19 @@ public final class CicsRuntime {
         return START_REQUESTS.isEmpty() ? null : START_REQUESTS.get(START_REQUESTS.size() - 1);
     }
 
-    public static synchronized void returnControl(String transid, Object commarea, Integer length) {
+    public static synchronized Response<Void> returnControl(String transid, Object commarea, Integer length) {
         RETURN_REQUESTS.add(new ReturnRequest(transid, commarea, length));
-        returnControl();
+        return returnControl();
     }
 
-    public static synchronized void syncpoint() {
+    public static synchronized Response<Void> syncpoint() {
         saveCurrentCommonWorkAreas();
-        setStatus(0, 0);
+        return status(null, 0, 0);
     }
 
-    public static synchronized void syncpointRollback() {
+    public static synchronized Response<Void> syncpointRollback() {
         CURRENT_COMMON_WORK_AREAS.remove();
-        setStatus(0, 0);
+        return status(null, 0, 0);
     }
 
     public static synchronized void clearReturnRequests() {
@@ -208,9 +211,9 @@ public final class CicsRuntime {
         return RETURN_REQUESTS.isEmpty() ? null : RETURN_REQUESTS.get(RETURN_REQUESTS.size() - 1);
     }
 
-    public static void returnControl() {
+    public static Response<Void> returnControl() {
         saveCurrentCommonWorkAreas();
-        setStatus(0, 0);
+        return status(null, 0, 0);
     }
 
     public static int getResp() {
@@ -223,6 +226,12 @@ public final class CicsRuntime {
 
     static void setStatus(int resp, int resp2) {
         LAST_STATUS.set(new CicsStatus(resp, resp2));
+    }
+
+    static <T> Response<T> status(T value, int resp, int resp2) {
+        Response<T> response = new Response<>(value, resp, resp2);
+        LAST_STATUS.set(new CicsStatus(resp, resp2));
+        return response;
     }
 
     private static Method findLinkProcedure(Class<?> serviceClass) {
@@ -392,6 +401,9 @@ public final class CicsRuntime {
         private static CicsStatus ok() {
             return new CicsStatus(0, 0);
         }
+    }
+
+    public record Response<T>(T value, int resp, int resp2) {
     }
 
     public record StartRequest(String transid, Object interval, Object from, Integer length, Object reqid,
