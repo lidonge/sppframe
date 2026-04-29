@@ -14,6 +14,7 @@ public final class CicsRuntime {
     private static final List<StartRequest> START_REQUESTS = new ArrayList<>();
     private static final List<ReturnRequest> RETURN_REQUESTS = new ArrayList<>();
     private static final Map<String, Object> COMMON_WORK_AREAS = new ConcurrentHashMap<>();
+    private static final Map<String, Object> LOADED_PROGRAMS = new ConcurrentHashMap<>();
     private static final ThreadLocal<Map<String, Object>> CURRENT_COMMON_WORK_AREAS =
             ThreadLocal.withInitial(ConcurrentHashMap::new);
     private static final ThreadLocal<CicsStatus> LAST_STATUS = ThreadLocal.withInitial(CicsStatus::ok);
@@ -82,6 +83,31 @@ public final class CicsRuntime {
 
     public static void saveCurrentCommonWorkAreas() {
         COMMON_WORK_AREAS.putAll(CURRENT_COMMON_WORK_AREAS.get());
+    }
+
+    public static <T> T loadProgram(String program, Class<T> type) {
+        if (type == null) {
+            throw new IllegalArgumentException("Loaded program type must not be null.");
+        }
+        String key = loadedProgramKey(program, type);
+        Object value = LOADED_PROGRAMS.computeIfAbsent(key, ignored -> newInstance(type));
+        setStatus(0, 0);
+        return type.cast(value);
+    }
+
+    public static void registerLoadedProgram(String program, Object value) {
+        if (value == null) {
+            return;
+        }
+        LOADED_PROGRAMS.put(loadedProgramKey(program, value.getClass()), value);
+    }
+
+    public static Map<String, Object> getLoadedProgramStore() {
+        return LOADED_PROGRAMS;
+    }
+
+    public static void clearLoadedPrograms() {
+        LOADED_PROGRAMS.clear();
     }
 
     public static Map<String, Object> getCommonWorkAreaStore() {
@@ -173,6 +199,11 @@ public final class CicsRuntime {
     private static String commonWorkAreaKey(String name, Class<?> type) {
         String actualName = name == null || name.isBlank() ? "CWA" : name.trim();
         return actualName + ":" + type.getName();
+    }
+
+    private static String loadedProgramKey(String program, Class<?> type) {
+        String actualProgram = program == null || program.isBlank() ? "" : program.trim();
+        return actualProgram + ":" + type.getName();
     }
 
     private static Object newInstance(Class<?> type) {
