@@ -5,7 +5,9 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -17,10 +19,12 @@ public final class CicsRuntime {
     private static final Map<String, Object> COMMON_WORK_AREAS = new ConcurrentHashMap<>();
     private static final Map<String, Object> LOADED_PROGRAMS = new ConcurrentHashMap<>();
     private static final Map<String, ReentrantLock> LOCAL_RESOURCE_LOCKS = new ConcurrentHashMap<>();
+    private static final Map<String, Queue<Object>> LOCAL_TD_QUEUES = new ConcurrentHashMap<>();
     private static final ThreadLocal<Map<String, Object>> CURRENT_COMMON_WORK_AREAS =
             ThreadLocal.withInitial(ConcurrentHashMap::new);
     private static final ThreadLocal<CicsStatus> LAST_STATUS = ThreadLocal.withInitial(CicsStatus::ok);
     private static volatile DistributedLock distributedLock = new LocalDistributedLock();
+    private static volatile CicsQueueService cicsQueueService = new LocalCicsQueueService();
 
     private CicsRuntime() {
     }
@@ -96,6 +100,34 @@ public final class CicsRuntime {
     public static void resetDistributedLock() {
         distributedLock = new LocalDistributedLock();
         LOCAL_RESOURCE_LOCKS.clear();
+    }
+
+    public static void writeqTd(Object queue, Object value) {
+        cicsQueueService.writeTd(queueName(queue), value);
+        setStatus(0, 0);
+    }
+
+    public static Object readqTd(Object queue) {
+        Object value = cicsQueueService.readTd(queueName(queue));
+        if (value == null) {
+            setStatus(13, 0);
+            return null;
+        }
+        setStatus(0, 0);
+        return value;
+    }
+
+    public static CicsQueueService getCicsQueueService() {
+        return cicsQueueService;
+    }
+
+    public static void setCicsQueueService(CicsQueueService queueService) {
+        cicsQueueService = queueService == null ? new LocalCicsQueueService() : queueService;
+    }
+
+    public static void resetCicsQueueService() {
+        cicsQueueService = new LocalCicsQueueService();
+        LOCAL_TD_QUEUES.clear();
     }
 
     public static void saveCommonWorkArea(String name, Object value) {
@@ -236,6 +268,10 @@ public final class CicsRuntime {
         return resource == null ? "" : String.valueOf(resource).trim();
     }
 
+    private static String queueName(Object queue) {
+        return queue == null ? "" : String.valueOf(queue).trim();
+    }
+
     private static Object newInstance(Class<?> type) {
         try {
             return type.getDeclaredConstructor().newInstance();
@@ -292,6 +328,12 @@ public final class CicsRuntime {
         void unlock(String resource);
     }
 
+    public interface CicsQueueService {
+        void writeTd(String queue, Object value);
+
+        Object readTd(String queue);
+    }
+
     private static final class LocalDistributedLock implements DistributedLock {
         @Override
         public void lock(String resource) {
@@ -305,6 +347,19 @@ public final class CicsRuntime {
                 return;
             }
             lock.unlock();
+        }
+    }
+
+    private static final class LocalCicsQueueService implements CicsQueueService {
+        @Override
+        public void writeTd(String queue, Object value) {
+            LOCAL_TD_QUEUES.computeIfAbsent(queue, ignored -> new ConcurrentLinkedQueue<>()).add(value);
+        }
+
+        @Override
+        public Object readTd(String queue) {
+            Queue<Object> values = LOCAL_TD_QUEUES.get(queue);
+            return values == null ? null : values.poll();
         }
     }
 
