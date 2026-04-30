@@ -39,6 +39,18 @@ public class Util {
         return new Scanner(System.in).nextLine();
     }
 
+    public static Object coalesce(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     public static String now() {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
     }
