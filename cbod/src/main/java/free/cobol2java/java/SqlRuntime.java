@@ -146,6 +146,19 @@ public final class SqlRuntime {
         return row.length == 0 ? null : row[0];
     }
 
+    public static List<?> selectAll(String repositoryClassName) {
+        Object repository = sqlArtifactRepository(repositoryClassName);
+        Object rows = invokeSqlArtifactMethod(repository, "selectAll");
+        if (rows instanceof List<?> list) {
+            return list;
+        }
+        return Collections.emptyList();
+    }
+
+    public static Object readColumn(Object row, String columnName) {
+        return readSqlArtifactProperty(row, columnName);
+    }
+
     public static Object[] selectRow(String repositoryClassName, String rowClassName, String[] columnNames,
             String keyColumnName, Object keyValue) {
         Object row = selectRepositoryRow(repositoryClassName, rowClassName, keyColumnName, keyValue);
