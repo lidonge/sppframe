@@ -20,6 +20,7 @@ public final class CicsRuntime {
     private static final Map<String, Object> LOADED_PROGRAMS = new ConcurrentHashMap<>();
     private static final Map<String, ReentrantLock> LOCAL_RESOURCE_LOCKS = new ConcurrentHashMap<>();
     private static final Map<String, Queue<Object>> LOCAL_TD_QUEUES = new ConcurrentHashMap<>();
+    private static final Map<String, List<Object>> LOCAL_TS_QUEUES = new ConcurrentHashMap<>();
     private static final ThreadLocal<Map<String, Object>> CURRENT_COMMON_WORK_AREAS =
             ThreadLocal.withInitial(ConcurrentHashMap::new);
     private static final ThreadLocal<CicsStatus> LAST_STATUS = ThreadLocal.withInitial(CicsStatus::ok);
@@ -117,6 +118,24 @@ public final class CicsRuntime {
         return status(value, 0, 0);
     }
 
+    public static Response<Void> writeqTs(Object queue, Object value, Object item) {
+        cicsQueueService.writeTs(queueName(queue), value, itemNumber(item));
+        return status(null, 0, 0);
+    }
+
+    public static Response<Object> readqTs(Object queue, Object item) {
+        Object value = cicsQueueService.readTs(queueName(queue), itemNumber(item));
+        if (value == null) {
+            return status(null, 13, 0);
+        }
+        return status(value, 0, 0);
+    }
+
+    public static Response<Void> deleteqTs(Object queue) {
+        cicsQueueService.deleteTs(queueName(queue));
+        return status(null, 0, 0);
+    }
+
     public static CicsQueueService getCicsQueueService() {
         return cicsQueueService;
     }
@@ -128,6 +147,7 @@ public final class CicsRuntime {
     public static void resetCicsQueueService() {
         cicsQueueService = new LocalCicsQueueService();
         LOCAL_TD_QUEUES.clear();
+        LOCAL_TS_QUEUES.clear();
     }
 
     public static void saveCommonWorkArea(String name, Object value) {
@@ -281,6 +301,24 @@ public final class CicsRuntime {
         return queue == null ? "" : String.valueOf(queue).trim();
     }
 
+    private static Integer itemNumber(Object item) {
+        if (item == null) {
+            return null;
+        }
+        if (item instanceof Number number) {
+            return number.intValue();
+        }
+        String text = String.valueOf(item).trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     private static Object newInstance(Class<?> type) {
         try {
             return type.getDeclaredConstructor().newInstance();
@@ -341,6 +379,12 @@ public final class CicsRuntime {
         void writeTd(String queue, Object value);
 
         Object readTd(String queue);
+
+        void writeTs(String queue, Object value, Integer item);
+
+        Object readTs(String queue, Integer item);
+
+        void deleteTs(String queue);
     }
 
     private static final class LocalDistributedLock implements DistributedLock {
@@ -369,6 +413,31 @@ public final class CicsRuntime {
         public Object readTd(String queue) {
             Queue<Object> values = LOCAL_TD_QUEUES.get(queue);
             return values == null ? null : values.poll();
+        }
+
+        @Override
+        public void writeTs(String queue, Object value, Integer item) {
+            List<Object> values = LOCAL_TS_QUEUES.computeIfAbsent(queue, ignored -> new ArrayList<>());
+            if (item == null || item <= 0 || item > values.size()) {
+                values.add(value);
+                return;
+            }
+            values.set(item - 1, value);
+        }
+
+        @Override
+        public Object readTs(String queue, Integer item) {
+            List<Object> values = LOCAL_TS_QUEUES.get(queue);
+            if (values == null || values.isEmpty()) {
+                return null;
+            }
+            int index = item == null || item <= 0 ? 0 : item - 1;
+            return index >= values.size() ? null : values.get(index);
+        }
+
+        @Override
+        public void deleteTs(String queue) {
+            LOCAL_TS_QUEUES.remove(queue);
         }
     }
 
