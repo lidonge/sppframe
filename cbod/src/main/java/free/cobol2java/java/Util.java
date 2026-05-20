@@ -24,6 +24,7 @@ import free.cobol2java.java.redefines.AbstractCobolRedefines;
  */
 public class Util {
     private static final String ALL_MARKER_PREFIX = "\u0000ALL:";
+    private static final int DEFAULT_REDEFINES_STORAGE_SIZE = 4096;
 
     public static void output(Object... args) {
         if (args == null || args.length == 0) {
@@ -902,6 +903,20 @@ public class Util {
             Constructor<?> constructor = typeClass.getDeclaredConstructor();
             constructor.setAccessible(true);
             return constructor.newInstance();
+        } catch (Exception ignored) {
+            return instantiateRedefines(typeClass);
+        }
+    }
+
+    private static Object instantiateRedefines(Class<?> typeClass) {
+        if (!AbstractCobolRedefines.class.isAssignableFrom(typeClass)) {
+            return null;
+        }
+        try {
+            Constructor<?> constructor = typeClass.getDeclaredConstructor(byte[].class, int.class, int.class);
+            constructor.setAccessible(true);
+            byte[] storage = new byte[DEFAULT_REDEFINES_STORAGE_SIZE];
+            return constructor.newInstance(storage, 0, storage.length);
         } catch (Exception ignored) {
             return null;
         }
