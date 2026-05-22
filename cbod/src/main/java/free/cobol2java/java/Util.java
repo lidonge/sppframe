@@ -275,44 +275,43 @@ public class Util {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> T copy(Object src, T target) {
-        if (target == null) {
-            return (T) src;
-        }
-        if (target instanceof String) {
-            return (T) copyString(src);
-        }
-        if (target instanceof Integer) {
-            return (T) copyInteger(src);
-        }
-        if (target instanceof Long) {
-            return (T) copyLong(src);
-        }
-        if (target instanceof Short) {
-            return (T) copyShort(src);
-        }
-        if (target instanceof Byte) {
-            return (T) copyByte(src);
-        }
-        if (target instanceof Double) {
-            return (T) copyDouble(src);
-        }
-        if (target instanceof Float) {
-            return (T) copyFloat(src);
-        }
-        if (target instanceof BigDecimal) {
-            return (T) bigDecimalValue(src);
-        }
-        if (target instanceof BigInteger) {
-            return (T) bigIntegerValue(src);
-        }
-        if (src == null) {
+    public static <T, U> U copy(T src, U target) {
+        if (src == null || target == null) {
             return target;
         }
-        if (target.getClass().isInstance(src)) {
-            return (T) src;
+        if (target != null && !target.getClass().isInstance(src)) {
+            return copySameField((Object) src, target);
         }
-        return copySameField((Object) src, target);
+
+        if (target instanceof String) {
+            return (U) copyString(src);
+        }
+        if (target instanceof Integer) {
+            return (U) copyInteger(src);
+        }
+        if (target instanceof Long) {
+            return (U) copyLong(src);
+        }
+        if (target instanceof Short) {
+            return (U) copyShort(src);
+        }
+        if (target instanceof Byte) {
+            return (U) copyByte(src);
+        }
+        if (target instanceof Double) {
+            return (U) copyDouble(src);
+        }
+        if (target instanceof Float) {
+            return (U) copyFloat(src);
+        }
+        if (target instanceof BigDecimal) {
+            return (U) bigDecimalValue(src);
+        }
+        if (target instanceof BigInteger) {
+            return (U) bigIntegerValue(src);
+        }
+          
+        return (U) src;
     }
 
     public static BigDecimal bigDecimalValue(Object value) {
@@ -522,7 +521,7 @@ public class Util {
         return subvalue(wsStringA, 1, len);
     }
 
-    private static <T, U> U copySameField(T src, U target) {
+    public static <T, U> U copySameField(T src, U target) {
         if (src == null || target == null) {
             return target;
         }

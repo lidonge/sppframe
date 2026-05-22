@@ -18,7 +18,7 @@ public interface IService {
             java.lang.reflect.Method method = null;
 
             for (java.lang.reflect.Method m : this.getClass().getDeclaredMethods()) {
-                if (m.getName().equals("procedure") && m.getParameterCount() == parameters.length) {
+                if (m.getName().equals("procedure") ) {
                     method = m;
                     break;
                 }
@@ -30,7 +30,7 @@ public interface IService {
 
             method.setAccessible(true);
 
-            return method.invoke(this, parameters);
+            return method.invoke(this, new Object[]{parameters});
 
         } catch (Exception e) {
             e.printStackTrace();

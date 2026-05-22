@@ -1,11 +1,6 @@
 package free.cobol2java.java;
 
 
-import free.servpp.sppframe.common.IServiceContainer;
-import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -13,6 +8,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import free.servpp.sppframe.common.IServiceContainer;
+import jakarta.annotation.PostConstruct;
 
 /**
  * @author lidong@date 2024-10-25@version 1.0
@@ -41,7 +42,7 @@ public class ServiceManager {
 
     public static IService getService(String name) {
         if (name == null || name.isBlank()) {
-            return null;
+            name = "defaultService";
         }
         if (springServiceContainer != null) {
             Object service = springServiceContainer.getService(name);
