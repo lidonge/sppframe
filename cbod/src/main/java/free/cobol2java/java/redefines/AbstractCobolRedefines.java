@@ -61,11 +61,30 @@ public abstract class AbstractCobolRedefines<T> implements ICobolRedefines<T> {
         return new String(storage, start, length, charset);
     }
 
+    @Override
+    public String toString() {
+        return readRawString();
+    }
+
     protected void writeString(String value) {
         String actual = value == null ? "" : value;
-        byte[] src = actual.getBytes(charset);
+        writeBytes(actual.getBytes(charset));
+    }
+
+    protected void writeBytes(byte[] src) {
         Arrays.fill(storage, start, start + length, (byte) ' ');
-        System.arraycopy(src, 0, storage, start, Math.min(src.length, length));
+        if (src != null) {
+            System.arraycopy(src, 0, storage, start, Math.min(src.length, length));
+        }
+    }
+
+    public void set(String value) {
+        writeString(value);
+    }
+
+    @Override
+    public void set(ICobolRedefines<?> value) {
+        writeBytes(value == null ? null : value.getBytes());
     }
 
     protected void validateRange(int start, int length) {

@@ -7,5 +7,6 @@ public interface ICobolRedefines<T> {
     void setRedefines(int start,int length);
     T get();
     void set(T value);
+    void set(ICobolRedefines<?> value);
     byte[] getBytes();
 }

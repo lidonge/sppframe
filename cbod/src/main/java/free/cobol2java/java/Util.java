@@ -183,9 +183,6 @@ public class Util {
         return init(typeClass, picturePrecision(spec), pictureScale(spec));
     }
 
-    public static String subvalue(Object obj, int start, int len) {
-        return subvalue(obj, Integer.valueOf(start), Integer.valueOf(len));
-    }
 
     public static String subvalue(Object obj, Integer start, Integer len) {
         if (obj == null) {
