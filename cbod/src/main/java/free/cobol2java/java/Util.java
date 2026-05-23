@@ -528,11 +528,11 @@ public class Util {
 
         Map<String, Field> sourceFields = fieldsByName(src.getClass());
         for (Field targetField : target.getClass().getDeclaredFields()) {
-            if (skipField(targetField)) {
+            if (skipField(targetField) || Modifier.isFinal(targetField.getModifiers())) {
                 continue;
             }
             Field sourceField = sourceFields.get(targetField.getName());
-            if (sourceField == null || skipField(sourceField)) {
+            if (sourceField == null || skipField(sourceField) || Modifier.isFinal(sourceField.getModifiers())) {
                 continue;
             }
             try {
