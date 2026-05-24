@@ -20,6 +20,10 @@ public class CharacterCobolRedefines extends AbstractCobolRedefines<Character> {
         super(storage, start, length);
     }
 
+    public CharacterCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public Character get() {
         String value = readRawString();

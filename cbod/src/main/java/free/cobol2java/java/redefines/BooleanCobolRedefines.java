@@ -21,6 +21,10 @@ public class BooleanCobolRedefines extends AbstractCobolRedefines<Boolean> {
         super(storage, start, length);
     }
 
+    public BooleanCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public Boolean get() {
         String value = readTrimmedString().toLowerCase();

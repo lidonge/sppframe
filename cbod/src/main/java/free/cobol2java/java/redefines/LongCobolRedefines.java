@@ -17,6 +17,10 @@ public class LongCobolRedefines extends AbstractCobolRedefines<Long> {
         super(storage, start, length);
     }
 
+    public LongCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public Long get() {
         String value = readTrimmedString();

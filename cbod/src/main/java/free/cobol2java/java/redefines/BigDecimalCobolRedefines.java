@@ -15,6 +15,10 @@ public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal>
         super(storage, start, length);
     }
 
+    public BigDecimalCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public BigDecimal get() {
         String value = readTrimmedString();

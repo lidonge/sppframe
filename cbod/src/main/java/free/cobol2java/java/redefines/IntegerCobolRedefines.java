@@ -17,6 +17,10 @@ public class IntegerCobolRedefines extends AbstractCobolRedefines<Integer> {
         super(storage, start, length);
     }
 
+    public IntegerCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public Integer get() {
         String value = readTrimmedString();

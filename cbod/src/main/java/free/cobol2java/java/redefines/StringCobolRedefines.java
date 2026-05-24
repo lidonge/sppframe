@@ -17,6 +17,10 @@ public class StringCobolRedefines extends AbstractCobolRedefines<String> {
         super(storage, start, length);
     }
 
+    public StringCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public String get() {
         return readRawString();

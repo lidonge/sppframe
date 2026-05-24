@@ -15,6 +15,10 @@ public class BigIntegerCobolRedefines extends AbstractCobolRedefines<BigInteger>
         super(storage, start, length);
     }
 
+    public BigIntegerCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public BigInteger get() {
         String value = readTrimmedString();

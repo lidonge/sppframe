@@ -17,6 +17,10 @@ public class DoubleCobolRedefines extends AbstractCobolRedefines<Double> {
         super(storage, start, length);
     }
 
+    public DoubleCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public Double get() {
         String value = readTrimmedString();

@@ -17,6 +17,10 @@ public class ShortCobolRedefines extends AbstractCobolRedefines<Short> {
         super(storage, start, length);
     }
 
+    public ShortCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public Short get() {
         String value = readTrimmedString();

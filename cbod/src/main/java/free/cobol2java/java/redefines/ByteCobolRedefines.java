@@ -17,6 +17,10 @@ public class ByteCobolRedefines extends AbstractCobolRedefines<Byte> {
         super(storage, start, length);
     }
 
+    public ByteCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public Byte get() {
         String value = readTrimmedString();

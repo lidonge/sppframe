@@ -17,6 +17,10 @@ public class FloatCobolRedefines extends AbstractCobolRedefines<Float> {
         super(storage, start, length);
     }
 
+    public FloatCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
+        super(storage, start, length);
+    }
+
     @Override
     public Float get() {
         String value = readTrimmedString();
