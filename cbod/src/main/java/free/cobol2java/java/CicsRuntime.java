@@ -2,8 +2,12 @@ package free.cobol2java.java;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,6 +18,12 @@ import java.util.concurrent.locks.ReentrantLock;
  * Runtime hooks for converted LINK/START commands.
  */
 public final class CicsRuntime {
+    public static final int NORMAL = 0;
+    public static final int ERROR = 1;
+    public static final int NOTFND = 13;
+    public static final int INVREQ = 16;
+    public static final int ENDFILE = 20;
+
     private static final List<StartRequest> START_REQUESTS = new ArrayList<>();
     private static final List<ReturnRequest> RETURN_REQUESTS = new ArrayList<>();
     private static final Map<String, Object> COMMON_WORK_AREAS = new ConcurrentHashMap<>();
@@ -24,6 +34,8 @@ public final class CicsRuntime {
     private static final ThreadLocal<Map<String, Object>> CURRENT_COMMON_WORK_AREAS =
             ThreadLocal.withInitial(ConcurrentHashMap::new);
     private static final ThreadLocal<CicsStatus> LAST_STATUS = ThreadLocal.withInitial(CicsStatus::ok);
+    private static final ThreadLocal<HandleFrame> CURRENT_HANDLE = ThreadLocal.withInitial(HandleFrame::new);
+    private static final ThreadLocal<Deque<HandleFrame>> HANDLE_STACK = ThreadLocal.withInitial(ArrayDeque::new);
     private static volatile DistributedLock distributedLock = new LocalDistributedLock();
     private static volatile CicsQueueService cicsQueueService = new LocalCicsQueueService();
 
@@ -244,6 +256,104 @@ public final class CicsRuntime {
         return LAST_STATUS.get().resp2;
     }
 
+    public static ConditionHandler condition(String condition, HandlerAction action) {
+        return new ConditionHandler(condition, conditionResp(condition), action);
+    }
+
+    public static ConditionHandler condition(int resp, HandlerAction action) {
+        return new ConditionHandler(null, resp, action);
+    }
+
+    public static void handleCondition(ConditionHandler... handlers) {
+        if (handlers == null) {
+            return;
+        }
+        HandleFrame frame = CURRENT_HANDLE.get();
+        for (ConditionHandler handler : handlers) {
+            if (handler == null || handler.action == null) {
+                continue;
+            }
+            String condition = normalizeCondition(handler.condition);
+            if ("ERROR".equals(condition)) {
+                frame.errorHandler = handler.action;
+                continue;
+            }
+            int resp = handler.resp;
+            if (resp >= 0) {
+                frame.conditionHandlers.put(resp, handler.action);
+            }
+        }
+    }
+
+    public static void ignoreCondition(String... conditions) {
+        if (conditions == null) {
+            return;
+        }
+        HandleFrame frame = CURRENT_HANDLE.get();
+        for (String condition : conditions) {
+            String normalized = normalizeCondition(condition);
+            if ("ERROR".equals(normalized)) {
+                frame.errorHandler = null;
+                continue;
+            }
+            int resp = conditionResp(normalized);
+            if (resp >= 0) {
+                frame.conditionHandlers.remove(resp);
+            }
+        }
+    }
+
+    public static void handleAbend(HandlerAction action) {
+        CURRENT_HANDLE.get().abendHandler = action;
+    }
+
+    public static void resetHandleAbend() {
+        CURRENT_HANDLE.get().abendHandler = null;
+    }
+
+    public static boolean dispatchHandle(Response<?> response) {
+        return dispatchHandle(response == null ? NORMAL : response.resp());
+    }
+
+    public static boolean dispatchHandle(int resp) {
+        if (resp == NORMAL) {
+            return false;
+        }
+        HandleFrame frame = CURRENT_HANDLE.get();
+        HandlerAction handler = frame.conditionHandlers.get(resp);
+        if (handler == null) {
+            handler = frame.errorHandler;
+        }
+        if (handler == null) {
+            return false;
+        }
+        handler.run();
+        return true;
+    }
+
+    public static boolean dispatchAbend() {
+        HandlerAction handler = CURRENT_HANDLE.get().abendHandler;
+        if (handler == null) {
+            return false;
+        }
+        handler.run();
+        return true;
+    }
+
+    public static void pushHandle() {
+        HANDLE_STACK.get().push(CURRENT_HANDLE.get().copy());
+    }
+
+    public static void popHandle() {
+        Deque<HandleFrame> stack = HANDLE_STACK.get();
+        CURRENT_HANDLE.set(stack.isEmpty() ? new HandleFrame() : stack.pop());
+    }
+
+    public static void clearHandle() {
+        CURRENT_HANDLE.remove();
+        HANDLE_STACK.remove();
+    }
+
     static void setStatus(int resp, int resp2) {
         LAST_STATUS.set(new CicsStatus(resp, resp2));
     }
@@ -319,6 +429,71 @@ public final class CicsRuntime {
         }
     }
 
+    private static int conditionResp(String condition) {
+        String normalized = normalizeCondition(condition);
+        if (normalized == null) {
+            return -1;
+        }
+        return switch (normalized) {
+            case "NORMAL" -> NORMAL;
+            case "ERROR" -> ERROR;
+            case "RDATT" -> 2;
+            case "WRBRK" -> 3;
+            case "EOF" -> 4;
+            case "EODS" -> 5;
+            case "EOC" -> 6;
+            case "INBFMH" -> 7;
+            case "ENDINPT" -> 8;
+            case "NONVAL" -> 9;
+            case "NOSTART" -> 10;
+            case "TERMIDERR" -> 11;
+            case "FILENOTFOUND", "DSIDERR" -> 12;
+            case "NOTFND" -> NOTFND;
+            case "DUPREC" -> 14;
+            case "DUPKEY" -> 15;
+            case "INVREQ" -> INVREQ;
+            case "IOERR" -> 17;
+            case "NOSPACE" -> 18;
+            case "NOTOPEN" -> 19;
+            case "ENDFILE" -> ENDFILE;
+            case "ILLOGIC" -> 21;
+            case "LENGERR" -> 22;
+            case "QZERO" -> 23;
+            case "SIGNAL" -> 24;
+            case "QBUSY" -> 25;
+            case "ITEMERR" -> 26;
+            case "PGMIDERR" -> 27;
+            case "TRANSIDERR" -> 28;
+            case "ENDDATA" -> 29;
+            case "INVTSREQ" -> 30;
+            case "EXPIRED" -> 31;
+            case "RETPAGE" -> 32;
+            case "RTEFAIL" -> 33;
+            case "RTESOME" -> 34;
+            case "TSIOERR" -> 35;
+            case "MAPFAIL" -> 36;
+            case "INVERRTERM" -> 37;
+            case "INVMPSZ" -> 38;
+            case "IGREQID" -> 39;
+            case "OVERFLOW" -> 40;
+            case "INVLDC" -> 41;
+            case "NOSTG" -> 42;
+            case "JIDERR" -> 43;
+            case "QIDERR" -> 44;
+            case "NOJBUFSP" -> 45;
+            case "DSSTAT" -> 46;
+            case "DISABLED" -> 84;
+            default -> -1;
+        };
+    }
+
+    private static String normalizeCondition(String condition) {
+        if (condition == null || condition.isBlank()) {
+            return null;
+        }
+        return condition.trim().replace('-', '_').toUpperCase(Locale.ROOT);
+    }
+
     private static Object newInstance(Class<?> type) {
         try {
             return type.getDeclaredConstructor().newInstance();
@@ -385,6 +560,10 @@ public final class CicsRuntime {
         Object readTs(String queue, Integer item);
 
         void deleteTs(String queue);
+    }
+
+    public interface HandlerAction {
+        void run();
     }
 
     private static final class LocalDistributedLock implements DistributedLock {
@@ -470,6 +649,23 @@ public final class CicsRuntime {
         private static CicsStatus ok() {
             return new CicsStatus(0, 0);
         }
+    }
+
+    private static final class HandleFrame {
+        private final Map<Integer, HandlerAction> conditionHandlers = new LinkedHashMap<>();
+        private HandlerAction errorHandler;
+        private HandlerAction abendHandler;
+
+        private HandleFrame copy() {
+            HandleFrame copy = new HandleFrame();
+            copy.conditionHandlers.putAll(conditionHandlers);
+            copy.errorHandler = errorHandler;
+            copy.abendHandler = abendHandler;
+            return copy;
+        }
+    }
+
+    public record ConditionHandler(String condition, int resp, HandlerAction action) {
     }
 
     public record Response<T>(T value, int resp, int resp2) {
