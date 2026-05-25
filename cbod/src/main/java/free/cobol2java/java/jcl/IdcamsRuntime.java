@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,56 +20,122 @@ public final class IdcamsRuntime {
         if (step == null) {
             return JclReturnCodes.ERROR;
         }
+        VsamStorageCatalog catalog = VsamStorageCatalog.from(step);
+        ConditionCodes codes = new ConditionCodes();
+        List<String> commands;
         try {
-            VsamStorageCatalog catalog = VsamStorageCatalog.from(step);
-            for (String command : controlStatements(step.dd("SYSIN"))) {
-                executeCommand(step, catalog, command);
-            }
-            return JclReturnCodes.OK;
-        } catch (IllegalArgumentException e) {
-            return JclReturnCodes.ERROR;
+            commands = controlStatements(step.dd("SYSIN"));
         } catch (IOException e) {
             return JclReturnCodes.SEVERE_ERROR;
         }
+        for (String command : commands) {
+            CommandResult result = executeCommand(step, catalog, command, codes);
+            if (!result.updateLastCc) {
+                continue;
+            }
+            codes.lastCc = result.returnCode;
+            codes.maxCc = Math.max(codes.maxCc, result.returnCode);
+        }
+        return codes.maxCc;
     }
 
-    private static void executeCommand(JclStep step, VsamStorageCatalog catalog, String command) throws IOException {
+    private static CommandResult executeCommand(JclStep step,
+                                                VsamStorageCatalog catalog,
+                                                String command,
+                                                ConditionCodes codes) {
+        try {
+            return executeCommandChecked(step, catalog, command, codes);
+        } catch (IllegalArgumentException e) {
+            return CommandResult.returnCode(JclReturnCodes.ERROR);
+        } catch (IOException e) {
+            return CommandResult.returnCode(JclReturnCodes.SEVERE_ERROR);
+        }
+    }
+
+    private static CommandResult executeCommandChecked(JclStep step,
+                                                       VsamStorageCatalog catalog,
+                                                       String command,
+                                                       ConditionCodes codes) throws IOException {
         String upper = command.toUpperCase(Locale.ROOT);
+        if (upper.startsWith("IF ")) {
+            return executeIf(step, catalog, command, codes);
+        }
+        if (upper.startsWith("SET ")) {
+            return executeSet(command, codes);
+        }
         if (upper.startsWith("DEFINE ") && upper.contains(" GDG")) {
             String name = nameValue(command);
             if (name == null) {
                 throw new IllegalArgumentException("Missing IDCAMS DEFINE GDG NAME");
             }
             JclDatasetRuntime.defineGdg(name);
-            return;
+            return CommandResult.returnCode(JclReturnCodes.OK);
         }
         if (upper.startsWith("DEFINE ") && upper.contains(" CLUSTER")) {
             defineCluster(catalog, command);
-            return;
+            return CommandResult.returnCode(JclReturnCodes.OK);
         }
         if (upper.startsWith("DELETE ")) {
             String datasetName = firstOperand(command, "DELETE");
             if (!catalog.isDatabaseBacked(datasetName)) {
                 JclDatasetRuntime.deleteDataSet(datasetName);
             }
-            return;
+            return CommandResult.returnCode(JclReturnCodes.OK);
         }
         if (upper.startsWith("LISTCAT")) {
             String name = nameValue(command);
             if (catalog.isDatabaseBacked(name)) {
-                return;
+                return CommandResult.returnCode(JclReturnCodes.OK);
             }
             if (name != null && !JclDatasetRuntime.exists(name)) {
                 throw new IOException("IDCAMS LISTCAT data set not found: " + name);
             }
-            return;
+            return CommandResult.returnCode(JclReturnCodes.OK);
         }
         if (upper.startsWith("ALTER ")) {
-            return;
+            return CommandResult.returnCode(JclReturnCodes.OK);
         }
         if (upper.startsWith("REPRO ")) {
             repro(step, catalog, command);
+            return CommandResult.returnCode(JclReturnCodes.OK);
         }
+        return CommandResult.returnCode(JclReturnCodes.OK);
+    }
+
+    private static CommandResult executeIf(JclStep step,
+                                           VsamStorageCatalog catalog,
+                                           String command,
+                                           ConditionCodes codes) throws IOException {
+        int thenIndex = indexOfThen(command);
+        if (thenIndex < 0) {
+            return CommandResult.noUpdate();
+        }
+        String condition = command.substring(2, thenIndex).trim();
+        String thenCommand = command.substring(thenIndex + 4).trim();
+        if (thenCommand.isBlank()) {
+            return CommandResult.noUpdate();
+        }
+        JclIfCondition parsed = JclIfCondition.parse(condition);
+        if (parsed == null || !parsed.matches(Map.of(), codes.maxCc, codes.lastCc)) {
+            return CommandResult.noUpdate();
+        }
+        return executeCommandChecked(step, catalog, thenCommand, codes);
+    }
+
+    private static CommandResult executeSet(String command, ConditionCodes codes) {
+        Matcher matcher = Pattern.compile("\\b(MAXCC|LASTCC)\\s*=\\s*(\\d+)\\b", Pattern.CASE_INSENSITIVE)
+                .matcher(command);
+        if (!matcher.find()) {
+            return CommandResult.returnCode(JclReturnCodes.OK);
+        }
+        int value = Integer.parseInt(matcher.group(2));
+        if ("MAXCC".equalsIgnoreCase(matcher.group(1))) {
+            codes.maxCc = value;
+            return CommandResult.noUpdate();
+        }
+        codes.lastCc = value;
+        codes.maxCc = Math.max(codes.maxCc, value);
+        return CommandResult.noUpdate();
     }
 
     private static void defineCluster(VsamStorageCatalog catalog, String command) throws IOException {
@@ -141,7 +208,9 @@ public final class IdcamsRuntime {
                 || upper.startsWith("DELETE ")
                 || upper.startsWith("LISTCAT")
                 || upper.startsWith("ALTER ")
-                || upper.startsWith("REPRO ");
+                || upper.startsWith("REPRO ")
+                || upper.startsWith("SET ")
+                || upper.startsWith("IF ");
     }
 
     private static String stripComment(String line) {
@@ -164,5 +233,25 @@ public final class IdcamsRuntime {
             throw new IllegalArgumentException("Missing IDCAMS " + verb + " operand");
         }
         return value;
+    }
+
+    private static int indexOfThen(String command) {
+        Matcher matcher = Pattern.compile("\\bTHEN\\b", Pattern.CASE_INSENSITIVE).matcher(command);
+        return matcher.find() ? matcher.start() : -1;
+    }
+
+    private static final class ConditionCodes {
+        private int maxCc = JclReturnCodes.OK;
+        private int lastCc = JclReturnCodes.OK;
+    }
+
+    private record CommandResult(int returnCode, boolean updateLastCc) {
+        private static CommandResult returnCode(int returnCode) {
+            return new CommandResult(returnCode, true);
+        }
+
+        private static CommandResult noUpdate() {
+            return new CommandResult(JclReturnCodes.OK, false);
+        }
     }
 }
