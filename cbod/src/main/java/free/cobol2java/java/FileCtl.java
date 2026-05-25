@@ -9,8 +9,23 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class FileCtl {
     private static final Map<String, LinkedHashMap<String, Object>> COBOL_FILES = new ConcurrentHashMap<>();
+    private static final Map<String, String> OPEN_MODES = new ConcurrentHashMap<>();
+    private static final ThreadLocal<UseFrame> USE_PROCEDURES = ThreadLocal.withInitial(UseFrame::new);
+    private static final ThreadLocal<Boolean> DISPATCHING = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     private FileCtl() {
+    }
+
+    /**
+     * USE AFTER STANDARD ERROR/EXCEPTION PROCEDURE registrations for the current thread.
+     * COBOL declaratives are program scoped and execute synchronously, so a thread-local
+     * frame mirrors {@code CicsRuntime}'s HANDLE state without depending on which generated
+     * object instance ({@code this} vs. an inner handler) issues the file operation.
+     */
+    private static final class UseFrame {
+        private final Map<String, Runnable> byFile = new LinkedHashMap<>();
+        private final Map<String, Runnable> byMode = new LinkedHashMap<>();
+        private Runnable global;
     }
 
     private static final class FileControlMeta {
@@ -20,10 +35,76 @@ public final class FileCtl {
         String statusFieldName;
     }
 
+    /**
+     * Registers a USE AFTER STANDARD ERROR/EXCEPTION PROCEDURE declarative.
+     *
+     * @param procedure the declarative body to run when a matching file error occurs
+     * @param fileNames the files named after {@code ON file-1 [file-2 ...]}; when empty the
+     *                  procedure becomes the catch-all handler for every file
+     */
+    public static void useAfterError(Runnable procedure, String... fileNames) {
+        if (procedure == null) {
+            return;
+        }
+        UseFrame frame = USE_PROCEDURES.get();
+        if (fileNames == null || fileNames.length == 0) {
+            frame.global = procedure;
+            return;
+        }
+        for (String fileName : fileNames) {
+            if (fileName != null && !fileName.isBlank()) {
+                frame.byFile.put(normalizeName(fileName), procedure);
+            }
+        }
+    }
+
+    /** Registers {@code USE AFTER ... ON INPUT}. */
+    public static void useAfterErrorOnInput(Runnable procedure) {
+        registerModeProcedure("INPUT", procedure);
+    }
+
+    /** Registers {@code USE AFTER ... ON OUTPUT}. */
+    public static void useAfterErrorOnOutput(Runnable procedure) {
+        registerModeProcedure("OUTPUT", procedure);
+    }
+
+    /** Registers {@code USE AFTER ... ON I-O}. */
+    public static void useAfterErrorOnIo(Runnable procedure) {
+        registerModeProcedure("I-O", procedure);
+    }
+
+    /** Registers {@code USE AFTER ... ON EXTEND}. */
+    public static void useAfterErrorOnExtend(Runnable procedure) {
+        registerModeProcedure("EXTEND", procedure);
+    }
+
+    private static void registerModeProcedure(String mode, Runnable procedure) {
+        if (procedure == null || mode == null) {
+            return;
+        }
+        USE_PROCEDURES.get().byMode.put(mode.trim().toUpperCase(), procedure);
+    }
+
+    /** Clears every registered USE procedure for the current thread. */
+    public static void clearUseProcedures() {
+        USE_PROCEDURES.remove();
+        DISPATCHING.remove();
+    }
+
+    /** Clears all simulated file state and registered USE procedures. */
+    public static void reset() {
+        COBOL_FILES.clear();
+        OPEN_MODES.clear();
+        clearUseProcedures();
+    }
+
     public static void cobolOpen(Object owner, String fileName, String mode) {
         FileControlMeta meta = findControlByFileName(owner, fileName);
         String normalizedMode = mode == null ? "" : mode.trim().toUpperCase();
         String fileKey = fileStoreKey(owner, fileName);
+        // Record the (attempted) open mode up front so that an OPEN that fails before the file
+        // exists can still route its error to an ON INPUT/OUTPUT/I-O/EXTEND declarative.
+        OPEN_MODES.put(fileKey, normalizedMode);
         LinkedHashMap<String, Object> store = COBOL_FILES.get(fileKey);
 
         if ("OUTPUT".equals(normalizedMode)) {
@@ -339,7 +420,57 @@ public final class FileCtl {
                 field.set(owner, statusCode);
             }
         } catch (Exception ignored) {
+        } finally {
+            maybeDispatchUseProcedure(owner, meta, statusCode);
         }
+    }
+
+    /**
+     * Triggers the registered USE AFTER ERROR procedure when an operation produced a
+     * permanent/logic/implementor error (status classes 3x, 4x and 9x).
+     * <p>
+     * AT END (1x) and INVALID KEY (2x) are intentionally excluded: those conditions are
+     * delivered to the statement's AT END / INVALID KEY phrase by the generated code, and a
+     * COBOL declarative does not fire for a condition that has an applicable phrase.
+     */
+    private static void maybeDispatchUseProcedure(Object owner, FileControlMeta meta, String statusCode) {
+        if (meta == null || !isErrorClass(statusCode) || Boolean.TRUE.equals(DISPATCHING.get())) {
+            return;
+        }
+        Runnable procedure = resolveUseProcedure(owner, meta);
+        if (procedure == null) {
+            return;
+        }
+        DISPATCHING.set(Boolean.TRUE);
+        try {
+            procedure.run();
+        } finally {
+            DISPATCHING.set(Boolean.FALSE);
+        }
+    }
+
+    private static Runnable resolveUseProcedure(Object owner, FileControlMeta meta) {
+        UseFrame frame = USE_PROCEDURES.get();
+        Runnable byFile = frame.byFile.get(normalizeName(meta.fileName));
+        if (byFile != null) {
+            return byFile;
+        }
+        String mode = OPEN_MODES.get(fileStoreKey(owner, meta.fileName));
+        if (mode != null && !mode.isEmpty()) {
+            Runnable byMode = frame.byMode.get(mode);
+            if (byMode != null) {
+                return byMode;
+            }
+        }
+        return frame.global;
+    }
+
+    private static boolean isErrorClass(String statusCode) {
+        if (statusCode == null || statusCode.isEmpty()) {
+            return false;
+        }
+        char statusClass = statusCode.charAt(0);
+        return statusClass == '3' || statusClass == '4' || statusClass == '9';
     }
 
     private static String normalizeName(String name) {
