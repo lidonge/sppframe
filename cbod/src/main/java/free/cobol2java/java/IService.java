@@ -17,7 +17,7 @@ public interface IService {
         try {
             java.lang.reflect.Method method = null;
 
-            for (java.lang.reflect.Method m : this.getClass().getDeclaredMethods()) {
+            for (java.lang.reflect.Method m : this.getClass().getMethods()) {
                 if (m.getName().equals("procedure") ) {
                     method = m;
                     break;
