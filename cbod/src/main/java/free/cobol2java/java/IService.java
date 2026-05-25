@@ -15,12 +15,25 @@ public interface IService {
      */
     default Object execute(Object... parameters) {
         try {
+            Object[] actualParameters = parameters == null ? new Object[0] : parameters;
             java.lang.reflect.Method method = null;
 
-            for (java.lang.reflect.Method m : this.getClass().getMethods()) {
-                if (m.getName().equals("procedure") ) {
+            for (java.lang.reflect.Method m : this.getClass().getDeclaredMethods()) {
+                if (m.getName().equals("procedure")
+                        && !m.isVarArgs()
+                        && m.getParameterCount() == actualParameters.length) {
                     method = m;
                     break;
+                }
+            }
+            if (method == null) {
+                for (java.lang.reflect.Method m : this.getClass().getDeclaredMethods()) {
+                    if (m.getName().equals("procedure")
+                            && m.getParameterCount() == 1
+                            && m.getParameterTypes()[0].isArray()) {
+                        method = m;
+                        break;
+                    }
                 }
             }
 
@@ -30,7 +43,11 @@ public interface IService {
 
             method.setAccessible(true);
 
-            return method.invoke(this, new Object[]{parameters});
+            if (method.isVarArgs()
+                    || (method.getParameterCount() == 1 && method.getParameterTypes()[0].isArray())) {
+                return method.invoke(this, new Object[]{actualParameters});
+            }
+            return method.invoke(this, actualParameters);
 
         } catch (Exception e) {
             e.printStackTrace();

@@ -365,6 +365,21 @@ public class Util {
         }
     }
 
+    public static boolean isCobolSizeError(Object value, int precision, int scale) {
+        if (precision <= 0 || value == null) {
+            return false;
+        }
+        int allowedScale = Math.max(scale, 0);
+        BigDecimal decimal = bigDecimalValue(value).stripTrailingZeros();
+        int actualScale = Math.max(decimal.scale(), 0);
+        int integerDigits = decimal.precision() - actualScale;
+        if (integerDigits < 1) {
+            integerDigits = 1;
+        }
+        int allowedIntegerDigits = precision - allowedScale;
+        return integerDigits > allowedIntegerDigits || actualScale > allowedScale;
+    }
+
     public static BigDecimal bigDecimalAdd(Object left, Object right) {
         return bigDecimalValue(left).add(bigDecimalValue(right));
     }
@@ -528,11 +543,11 @@ public class Util {
 
         Map<String, Field> sourceFields = fieldsByName(src.getClass());
         for (Field targetField : target.getClass().getDeclaredFields()) {
-            if (skipField(targetField) || Modifier.isFinal(targetField.getModifiers())) {
+            if (skipField(targetField)) {
                 continue;
             }
             Field sourceField = sourceFields.get(targetField.getName());
-            if (sourceField == null || skipField(sourceField) || Modifier.isFinal(sourceField.getModifiers())) {
+            if (sourceField == null || skipField(sourceField)) {
                 continue;
             }
             try {

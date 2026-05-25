@@ -11,6 +11,7 @@ public class JclStep {
     private String proc;
     private String parm;
     private JclCond cond;
+    private JclIfCondition ifCondition;
     private final Map<String, String> parameters = new LinkedHashMap<>();
     private final List<JclDd> dds = new ArrayList<>();
 
@@ -39,6 +40,11 @@ public class JclStep {
 
     public JclStep cond(String cond) {
         this.cond = JclCond.parse(cond);
+        return this;
+    }
+
+    public JclStep ifCondition(String condition) {
+        this.ifCondition = JclIfCondition.parse(condition);
         return this;
     }
 
@@ -74,6 +80,10 @@ public class JclStep {
 
     public JclCond getCond() {
         return cond;
+    }
+
+    public JclIfCondition getIfCondition() {
+        return ifCondition;
     }
 
     public Map<String, String> getParameters() {
