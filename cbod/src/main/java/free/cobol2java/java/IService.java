@@ -18,7 +18,7 @@ public interface IService {
             Object[] actualParameters = parameters == null ? new Object[0] : parameters;
             java.lang.reflect.Method method = null;
 
-            for (java.lang.reflect.Method m : this.getClass().getDeclaredMethods()) {
+            for (java.lang.reflect.Method m : procedureMethods(this.getClass())) {
                 if (m.getName().equals("procedure")
                         && !m.isVarArgs()
                         && m.getParameterCount() == actualParameters.length) {
@@ -27,7 +27,7 @@ public interface IService {
                 }
             }
             if (method == null) {
-                for (java.lang.reflect.Method m : this.getClass().getDeclaredMethods()) {
+                for (java.lang.reflect.Method m : procedureMethods(this.getClass())) {
                     if (m.getName().equals("procedure")
                             && m.getParameterCount() == 1
                             && m.getParameterTypes()[0].isArray()) {
@@ -53,5 +53,15 @@ public interface IService {
             e.printStackTrace();
             return null;
         }
+    }
+
+    private static java.util.List<java.lang.reflect.Method> procedureMethods(Class<?> type) {
+        java.util.List<java.lang.reflect.Method> methods = new java.util.ArrayList<>();
+        for (Class<?> current = type; current != null; current = current.getSuperclass()) {
+            for (java.lang.reflect.Method method : current.getDeclaredMethods()) {
+                methods.add(method);
+            }
+        }
+        return methods;
     }
 }

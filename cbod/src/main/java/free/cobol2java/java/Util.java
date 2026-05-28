@@ -1425,4 +1425,24 @@ public class Util {
 
     private record PictureSpec(int alphaLength, int numericDigits, int scale, boolean signed) {
     }
+
+    /**
+     * 重构一下指针操作：
+        1、SET ADDRESS OF A TO PTR-B.
+        使用 ptrB = Util.setAddressOfAToPtrB(a,ptrB);
+        2、SET PTR-A TO ADDRESS OF B.
+        使用 ptrA = Util.setPtrAToAddressOfB(ptrA, b);
+        3、SET PTR-A TO PTR-B.
+        使用 ptrA = Util.setPtrAToPtrB(ptrA, ptrB);
+     */
+    public static <T> T setAddressOfAToPtrB(Object a, T ptrB){
+        return (T) a;
+    }
+
+    public static <T> T setPtrAToAddressOfB(T ptrA, Object b){
+        return null;
+    }
+    public static <T> T setPtrAToPtrB(T ptrA, Object b){
+        return null;
+    }
 }
