@@ -29,6 +29,6 @@ public class ShortCobolRedefines extends AbstractCobolRedefines<Short> {
 
     @Override
     public void set(Short value) {
-        writeString(String.valueOf(value == null ? 0 : value));
+        writeNumericString(String.valueOf(value == null ? 0 : value));
     }
 }

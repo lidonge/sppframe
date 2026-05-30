@@ -29,6 +29,6 @@ public class IntegerCobolRedefines extends AbstractCobolRedefines<Integer> {
 
     @Override
     public void set(Integer value) {
-        writeString(String.valueOf(value == null ? 0 : value));
+        writeNumericString(String.valueOf(value == null ? 0 : value));
     }
 }

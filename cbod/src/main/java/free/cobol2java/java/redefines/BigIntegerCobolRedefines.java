@@ -27,7 +27,7 @@ public class BigIntegerCobolRedefines extends AbstractCobolRedefines<BigInteger>
 
     @Override
     public void set(BigInteger value) {
-        writeString(value == null ? "0" : value.toString());
+        writeNumericString(value == null ? "0" : value.toString());
     }
 
 }

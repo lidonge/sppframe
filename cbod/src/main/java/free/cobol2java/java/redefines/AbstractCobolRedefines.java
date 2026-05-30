@@ -82,6 +82,17 @@ public abstract class AbstractCobolRedefines<T> implements ICobolRedefines<T> {
         writeBytes(actual.getBytes(charset));
     }
 
+    protected void writeNumericString(String value) {
+        String actual = value == null ? "0" : value.trim();
+        if (actual.isEmpty()) {
+            actual = "0";
+        }
+        if (actual.length() < length) {
+            actual = "0".repeat(length - actual.length()) + actual;
+        }
+        writeBytes(actual.getBytes(charset));
+    }
+
     protected void writeBytes(byte[] src) {
         byte[] bytes = storage.bytes();
         Arrays.fill(bytes, start, start + length, (byte) ' ');

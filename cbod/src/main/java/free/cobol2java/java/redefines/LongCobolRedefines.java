@@ -29,7 +29,7 @@ public class LongCobolRedefines extends AbstractCobolRedefines<Long> {
 
     @Override
     public void set(Long value) {
-        writeString(String.valueOf(value == null ? 0L : value));
+        writeNumericString(String.valueOf(value == null ? 0L : value));
     }
 
     @Override
