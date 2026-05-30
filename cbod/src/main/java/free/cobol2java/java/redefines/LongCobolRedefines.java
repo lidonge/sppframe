@@ -31,4 +31,17 @@ public class LongCobolRedefines extends AbstractCobolRedefines<Long> {
     public void set(Long value) {
         writeString(String.valueOf(value == null ? 0L : value));
     }
+
+    @Override
+    public void set(ICobolRedefines<?> value) {
+        Object actual = value == null ? null : value.get();
+        if (actual instanceof Number number) {
+            set(number.longValue());
+        } else if (actual == null) {
+            set(0L);
+        } else {
+            String text = actual.toString().trim();
+            set(text.isEmpty() ? 0L : Long.parseLong(text));
+        }
+    }
 }

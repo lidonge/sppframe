@@ -4,12 +4,17 @@ import free.cobol2java.java.IService;
 import free.cobol2java.java.ServiceManager;
 
 import java.lang.reflect.Constructor;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public final class CobolProgramInvoker {
     private static final String JAVA_SERVICE_CLASS = "JAVA_SERVICE_CLASS";
+    private static final String PROGRAM_SKIP_PROPERTY = "jcl.program.skip";
+    private static final String PROGRAM_SKIP_ENV = "JCL_PROGRAM_SKIP";
 
     private CobolProgramInvoker() {
     }
@@ -17,6 +22,10 @@ public final class CobolProgramInvoker {
     public static int invoke(JclStep step) throws Exception {
         if (step == null) {
             throw new IllegalArgumentException("JCL step is required");
+        }
+        if (isNoOpUtility(step.getProgram()) || isNoOpUtility(resolveServiceName(step))) {
+            processNoOpUtilityDds(step);
+            return JclReturnCodes.OK;
         }
         return invoke(resolveServiceName(step), step.getProgram(), step.getParmArray());
     }
@@ -26,6 +35,12 @@ public final class CobolProgramInvoker {
     }
 
     private static int invoke(String serviceName, String programName, String[] args) throws Exception {
+        if (isNoOpUtility(programName) || isNoOpUtility(serviceName)) {
+            return JclReturnCodes.OK;
+        }
+        if (isSkippedProgram(programName) || isSkippedProgram(serviceName)) {
+            return JclReturnCodes.OK;
+        }
         IService service = serviceByClassName(serviceName);
         if (service == null) {
             service = ServiceManager.getService(serviceName);
@@ -42,6 +57,51 @@ public final class CobolProgramInvoker {
             return number.intValue();
         }
         return returnCode == null ? JclReturnCodes.OK : returnCode;
+    }
+
+    private static boolean isNoOpUtility(String programName) {
+        return programName != null && "IEFBR14".equalsIgnoreCase(programName.trim());
+    }
+
+    private static void processNoOpUtilityDds(JclStep step) throws Exception {
+        for (JclDd dd : step.getDds()) {
+            Path path = JclDatasetRuntime.dataSetPath(dd);
+            if (path == null) {
+                continue;
+            }
+            String disp = JclDatasetRuntime.parameter(dd, "DISP");
+            String normalizedDisp = disp == null ? "" : disp.toUpperCase(Locale.ROOT);
+            if (normalizedDisp.contains("DELETE") && !normalizedDisp.contains("CATLG")) {
+                JclDatasetRuntime.deleteDataSet(JclDatasetRuntime.parameter(dd, "DSN"));
+                continue;
+            }
+            Path parent = path.toAbsolutePath().getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            if (!Files.exists(path)) {
+                Files.createFile(path);
+            }
+        }
+    }
+
+    private static boolean isSkippedProgram(String programName) {
+        if (programName == null || programName.isBlank()) {
+            return false;
+        }
+        String configured = System.getProperty(PROGRAM_SKIP_PROPERTY);
+        if (configured == null || configured.isBlank()) {
+            configured = System.getenv(PROGRAM_SKIP_ENV);
+        }
+        if (configured == null || configured.isBlank()) {
+            return false;
+        }
+        for (String item : configured.split(",")) {
+            if (programName.trim().equalsIgnoreCase(item.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String resolveServiceName(JclStep step) {

@@ -373,6 +373,9 @@ public final class CicsRuntime {
             if (!"procedure".equals(method.getName())) {
                 continue;
             }
+            if (method.isVarArgs()) {
+                continue;
+            }
             if (method.getParameterCount() == 1) {
                 oneArg = method;
             } else if (method.getParameterCount() == 2) {

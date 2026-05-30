@@ -19,12 +19,12 @@ public class JclDd {
     }
 
     public JclDd param(String key, String value) {
-        parameters.put(key, value);
+        parameters.put(key, JclSymbolRuntime.resolve(value));
         return this;
     }
 
     public JclDd data(String line) {
-        inlineData.add(line);
+        inlineData.add(JclSymbolRuntime.resolve(line));
         return this;
     }
 

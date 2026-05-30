@@ -3,6 +3,7 @@ package free.cobol2java.java.redefines;
 import java.math.BigDecimal;
 
 public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal> {
+
     public BigDecimalCobolRedefines(int length) {
         super(length);
     }
@@ -27,7 +28,22 @@ public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal>
 
     @Override
     public void set(BigDecimal value) {
-        writeString(value == null ? "0" : value.toPlainString());
+        writeString((value == null ? BigDecimal.ZERO : value).toPlainString());
+    }
+
+    @Override
+    public void set(ICobolRedefines<?> value) {
+        Object actual = value == null ? null : value.get();
+        if (actual instanceof BigDecimal decimal) {
+            set(decimal);
+        } else if (actual instanceof Number number) {
+            set(BigDecimal.valueOf(number.longValue()));
+        } else if (actual == null) {
+            set(BigDecimal.ZERO);
+        } else {
+            String text = actual.toString().trim();
+            set(text.isEmpty() ? BigDecimal.ZERO : new BigDecimal(text));
+        }
     }
 
 }

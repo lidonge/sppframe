@@ -34,7 +34,7 @@ public class JclStep {
     }
 
     public JclStep parm(String parm) {
-        this.parm = parm;
+        this.parm = JclSymbolRuntime.resolve(parm);
         return this;
     }
 
@@ -49,7 +49,7 @@ public class JclStep {
     }
 
     public JclStep param(String key, String value) {
-        parameters.put(key, value);
+        parameters.put(key, JclSymbolRuntime.resolve(value));
         return this;
     }
 
