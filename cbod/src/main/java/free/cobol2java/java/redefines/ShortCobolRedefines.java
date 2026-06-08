@@ -1,5 +1,7 @@
 package free.cobol2java.java.redefines;
 
+import free.cobol2java.java.CobolNumeric;
+
 /**
  * {@link Short} 类型的 COBOL REDEFINES 视图实现。
  */
@@ -30,5 +32,10 @@ public class ShortCobolRedefines extends AbstractCobolRedefines<Short> {
     @Override
     public void set(Short value) {
         writeNumericString(String.valueOf(value == null ? 0 : value));
+    }
+
+    public ShortCobolRedefines copy(Object value) {
+        set(CobolNumeric.toShort(value));
+        return this;
     }
 }

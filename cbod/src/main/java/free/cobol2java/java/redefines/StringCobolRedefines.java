@@ -30,4 +30,9 @@ public class StringCobolRedefines extends AbstractCobolRedefines<String> {
     public void set(String value) {
         writeString(value);
     }
+
+    public StringCobolRedefines copy(Object value) {
+        set(value == null ? "" : value.toString());
+        return this;
+    }
 }
