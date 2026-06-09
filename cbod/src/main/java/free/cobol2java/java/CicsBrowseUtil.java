@@ -1,6 +1,7 @@
 package free.cobol2java.java;
 
 import free.cobol2java.cics.CicsCrudRepository;
+import free.cobol2java.cics.CicsBrowseRepository;
 import free.cobol2java.cics.CicsDataAccessException;
 
 import java.util.ArrayList;
@@ -29,7 +30,7 @@ public final class CicsBrowseUtil {
         if (repository == null) {
             return CicsRuntime.status(null, 16, 1);
         }
-        List<Object> keys = snapshotKeys(repository);
+        List<Object> keys = browseKeys(repository, ridfld, gteq, equal, generic, keyLength);
         Object normalizedKey = normalizeKey(ridfld);
         int position = resolveStartPosition(keys, normalizedKey, gteq, equal, generic, keyLength);
         String browseKey = browseKey(repository);
@@ -37,7 +38,7 @@ public final class CicsBrowseUtil {
             BROWSE_STATES.remove(browseKey);
             return CicsRuntime.status(null, 13, 1);
         }
-        BROWSE_STATES.put(browseKey, new BrowseState(position));
+        BROWSE_STATES.put(browseKey, new BrowseState(keys, position));
         return CicsRuntime.status(null, 0, 0);
     }
 
@@ -50,7 +51,7 @@ public final class CicsBrowseUtil {
         if (state == null) {
             return CicsRuntime.status(null, 16, 2);
         }
-        List<Object> keys = snapshotKeys(repository);
+        List<Object> keys = state.keys;
         if (state.nextIndex < 0 || state.nextIndex >= keys.size()) {
             return CicsRuntime.status(null, 20, 1);
         }
@@ -70,7 +71,7 @@ public final class CicsBrowseUtil {
         if (state == null) {
             return CicsRuntime.status(null, 16, 2);
         }
-        List<Object> keys = snapshotKeys(repository);
+        List<Object> keys = state.keys;
         int targetIndex = state.nextIndex - 1;
         if (targetIndex < 0 || targetIndex >= keys.size()) {
             return CicsRuntime.status(null, 20, 1);
@@ -92,6 +93,22 @@ public final class CicsBrowseUtil {
             BROWSE_STATES.remove(browseKey(repository));
         }
         return CicsRuntime.status(null, 0, 0);
+    }
+
+    private static List<Object> browseKeys(CicsCrudRepository<Object, Object> repository, Object ridfld,
+                                           boolean gteq, boolean equal, boolean generic, Integer keyLength) {
+        if (repository instanceof CicsBrowseRepository<?, ?> browseRepository) {
+            try {
+                @SuppressWarnings("unchecked")
+                List<Object> keys = new ArrayList<>(((CicsBrowseRepository<Object, Object>) browseRepository)
+                        .browseKeys(ridfld, gteq, equal, generic, keyLength));
+                keys.sort(KEY_COMPARATOR);
+                return keys;
+            } catch (CicsDataAccessException e) {
+                return List.of();
+            }
+        }
+        return snapshotKeys(repository);
     }
 
     private static List<Object> snapshotKeys(CicsCrudRepository<Object, Object> repository) {
@@ -219,10 +236,12 @@ public final class CicsBrowseUtil {
     private static final Comparator<Object> KEY_COMPARATOR = CicsBrowseUtil::compareKeys;
 
     private static final class BrowseState {
+        private final List<Object> keys;
         private int nextIndex;
         private Object currentKey;
 
-        private BrowseState(int nextIndex) {
+        private BrowseState(List<Object> keys, int nextIndex) {
+            this.keys = keys == null ? List.of() : new ArrayList<>(keys);
             this.nextIndex = nextIndex;
         }
     }
