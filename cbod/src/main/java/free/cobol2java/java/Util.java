@@ -68,6 +68,14 @@ public class Util {
         return now();
     }
 
+    public static Long acceptDateYYMMDD() {
+        return Long.parseLong(new SimpleDateFormat("yyMMdd").format(new java.util.Date()));
+    }
+
+    public static Long acceptTimeHHMMSS00() {
+        return Long.parseLong(new SimpleDateFormat("HHmmss").format(new java.util.Date()) + "00");
+    }
+
     public static Object init(Class typeClass, int precision, int scale) {
         if (typeClass == null) {
             return null;
