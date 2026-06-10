@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class FileCtl {
     private static final Map<String, LinkedHashMap<String, Object>> COBOL_FILES = new ConcurrentHashMap<>();
     private static final Map<String, String> OPEN_MODES = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> READ_CURSORS = new ConcurrentHashMap<>();
     private static final Map<Class<?>, List<FileControlMeta>> CONTROLS_CACHE = new ConcurrentHashMap<>();
     private static final Map<FieldLookupKey, Field> FIELD_CACHE = new ConcurrentHashMap<>();
     private static final Map<Class<?>, Field> FALLBACK_STATUS_FIELD_CACHE = new ConcurrentHashMap<>();
@@ -125,6 +126,7 @@ public final class FileCtl {
     public static void reset() {
         COBOL_FILES.clear();
         OPEN_MODES.clear();
+        READ_CURSORS.clear();
         CONTROLS_CACHE.clear();
         FIELD_CACHE.clear();
         FALLBACK_STATUS_FIELD_CACHE.clear();
@@ -142,6 +144,7 @@ public final class FileCtl {
 
         if ("OUTPUT".equals(normalizedMode)) {
             COBOL_FILES.put(fileKey, new LinkedHashMap<>());
+            READ_CURSORS.remove(fileKey);
             setFileStatus(owner, meta, "00");
             return;
         }
@@ -155,11 +158,15 @@ public final class FileCtl {
             COBOL_FILES.put(fileKey, store);
         }
 
+        if ("INPUT".equals(normalizedMode) || "I-O".equals(normalizedMode)) {
+            READ_CURSORS.put(fileKey, 0);
+        }
         setFileStatus(owner, meta, "00");
     }
 
     public static void cobolClose(Object owner, String fileName) {
         FileControlMeta meta = findControlByFileName(owner, fileName);
+        READ_CURSORS.remove(fileStoreKey(owner, fileName));
         setFileStatus(owner, meta, "00");
     }
 
@@ -202,13 +209,32 @@ public final class FileCtl {
             setFileStatus(owner, meta, "23");
             return false;
         }
-        String key = extractKey(recordArea, meta.recordKeyName);
         LinkedHashMap<String, Object> store = COBOL_FILES.get(fileStoreKey(owner, meta.fileName));
+        if (!hasRecordKey(meta.recordKeyName)) {
+            return readSequential(owner, meta, recordArea, store);
+        }
+        String key = extractKey(recordArea, meta.recordKeyName);
         if (store == null || key == null || !store.containsKey(key)) {
             setFileStatus(owner, meta, "23");
             return false;
         }
         copyFields(store.get(key), recordArea);
+        setFileStatus(owner, meta, "00");
+        return true;
+    }
+
+    private static boolean readSequential(Object owner, FileControlMeta meta, Object recordArea,
+            LinkedHashMap<String, Object> store) {
+        String fileKey = fileStoreKey(owner, meta.fileName);
+        int index = READ_CURSORS.getOrDefault(fileKey, 0);
+        if (store == null || index >= store.size()) {
+            READ_CURSORS.put(fileKey, index);
+            setFileStatus(owner, meta, "00");
+            return false;
+        }
+        Object record = new ArrayList<>(store.values()).get(index);
+        copyFields(record, recordArea);
+        READ_CURSORS.put(fileKey, index + 1);
         setFileStatus(owner, meta, "00");
         return true;
     }
