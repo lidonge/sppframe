@@ -10,9 +10,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class FileCtl {
     private static final Map<String, LinkedHashMap<String, Object>> COBOL_FILES = new ConcurrentHashMap<>();
     private static final Map<String, String> OPEN_MODES = new ConcurrentHashMap<>();
-    private static final Map<String, Integer> READ_CURSORS = new ConcurrentHashMap<>();
-    private static final Map<Class<?>, List<FileControlMeta>> CONTROLS_CACHE = new ConcurrentHashMap<>();
-    private static final Map<FieldLookupKey, Field> FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> READ_POSITIONS = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, List<FileControlMeta>> CONTROL_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Map<String, FileControlMeta>> CONTROL_BY_FILE_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Map<String, FileControlMeta>> CONTROL_BY_RECORD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Field> FIELD_CACHE = new ConcurrentHashMap<>();
     private static final Map<Class<?>, Field> FALLBACK_STATUS_FIELD_CACHE = new ConcurrentHashMap<>();
     private static final ThreadLocal<UseFrame> USE_PROCEDURES = ThreadLocal.withInitial(UseFrame::new);
     private static final ThreadLocal<Boolean> DISPATCHING = ThreadLocal.withInitial(() -> Boolean.FALSE);
@@ -37,33 +39,6 @@ public final class FileCtl {
         String recordAreaName;
         String recordKeyName;
         String statusFieldName;
-    }
-
-    private static final class FieldLookupKey {
-        private final Class<?> type;
-        private final String fieldName;
-
-        private FieldLookupKey(Class<?> type, String fieldName) {
-            this.type = type;
-            this.fieldName = fieldName;
-        }
-
-        @Override
-        public boolean equals(Object other) {
-            if (this == other) {
-                return true;
-            }
-            if (!(other instanceof FieldLookupKey)) {
-                return false;
-            }
-            FieldLookupKey that = (FieldLookupKey) other;
-            return type.equals(that.type) && fieldName.equals(that.fieldName);
-        }
-
-        @Override
-        public int hashCode() {
-            return 31 * type.hashCode() + fieldName.hashCode();
-        }
     }
 
     /**
@@ -126,8 +101,10 @@ public final class FileCtl {
     public static void reset() {
         COBOL_FILES.clear();
         OPEN_MODES.clear();
-        READ_CURSORS.clear();
-        CONTROLS_CACHE.clear();
+        READ_POSITIONS.clear();
+        CONTROL_CACHE.clear();
+        CONTROL_BY_FILE_CACHE.clear();
+        CONTROL_BY_RECORD_CACHE.clear();
         FIELD_CACHE.clear();
         FALLBACK_STATUS_FIELD_CACHE.clear();
         clearUseProcedures();
@@ -144,7 +121,7 @@ public final class FileCtl {
 
         if ("OUTPUT".equals(normalizedMode)) {
             COBOL_FILES.put(fileKey, new LinkedHashMap<>());
-            READ_CURSORS.remove(fileKey);
+            READ_POSITIONS.remove(fileKey);
             setFileStatus(owner, meta, "00");
             return;
         }
@@ -159,14 +136,14 @@ public final class FileCtl {
         }
 
         if ("INPUT".equals(normalizedMode) || "I-O".equals(normalizedMode)) {
-            READ_CURSORS.put(fileKey, 0);
+            READ_POSITIONS.put(fileKey, 0);
         }
         setFileStatus(owner, meta, "00");
     }
 
     public static void cobolClose(Object owner, String fileName) {
         FileControlMeta meta = findControlByFileName(owner, fileName);
-        READ_CURSORS.remove(fileStoreKey(owner, fileName));
+        READ_POSITIONS.remove(fileStoreKey(owner, fileName));
         setFileStatus(owner, meta, "00");
     }
 
@@ -185,12 +162,12 @@ public final class FileCtl {
         }
         LinkedHashMap<String, Object> store = COBOL_FILES.computeIfAbsent(fileStoreKey(owner, meta.fileName),
                 ignored -> new LinkedHashMap<>());
-        String key = hasRecordKey(meta.recordKeyName) ? extractKey(recordObj, meta.recordKeyName) : nextSequentialKey(store);
+        String key = sequential(meta) ? nextSequentialKey(store) : extractKey(recordObj, meta.recordKeyName);
         if (key == null) {
             setFileStatus(owner, meta, "23");
             return false;
         }
-        if (store.containsKey(key)) {
+        if (!sequential(meta) && store.containsKey(key)) {
             setFileStatus(owner, meta, "22");
             return false;
         }
@@ -210,31 +187,22 @@ public final class FileCtl {
             return false;
         }
         LinkedHashMap<String, Object> store = COBOL_FILES.get(fileStoreKey(owner, meta.fileName));
-        if (!hasRecordKey(meta.recordKeyName)) {
-            return readSequential(owner, meta, recordArea, store);
-        }
-        String key = extractKey(recordArea, meta.recordKeyName);
-        if (store == null || key == null || !store.containsKey(key)) {
-            setFileStatus(owner, meta, "23");
+        if (store == null) {
+            setFileStatus(owner, meta, sequential(meta) ? "00" : "23");
             return false;
         }
-        copyFields(store.get(key), recordArea);
-        setFileStatus(owner, meta, "00");
-        return true;
-    }
-
-    private static boolean readSequential(Object owner, FileControlMeta meta, Object recordArea,
-            LinkedHashMap<String, Object> store) {
-        String fileKey = fileStoreKey(owner, meta.fileName);
-        int index = READ_CURSORS.getOrDefault(fileKey, 0);
-        if (store == null || index >= store.size()) {
-            READ_CURSORS.put(fileKey, index);
-            setFileStatus(owner, meta, "00");
+        Object record;
+        if (sequential(meta)) {
+            record = nextSequentialRecord(owner, meta, store);
+        } else {
+            String key = extractKey(recordArea, meta.recordKeyName);
+            record = key == null ? null : store.get(key);
+        }
+        if (record == null) {
+            setFileStatus(owner, meta, sequential(meta) ? "00" : "23");
             return false;
         }
-        Object record = new ArrayList<>(store.values()).get(index);
         copyFields(record, recordArea);
-        READ_CURSORS.put(fileKey, index + 1);
         setFileStatus(owner, meta, "00");
         return true;
     }
@@ -247,8 +215,8 @@ public final class FileCtl {
         if (meta == null) {
             return false;
         }
-        String key = extractKey(recordObj, meta.recordKeyName);
         LinkedHashMap<String, Object> store = COBOL_FILES.get(fileStoreKey(owner, meta.fileName));
+        String key = extractKey(recordObj, meta.recordKeyName);
         if (store == null || key == null || !store.containsKey(key)) {
             setFileStatus(owner, meta, "23");
             return false;
@@ -293,38 +261,56 @@ public final class FileCtl {
     }
 
     private static FileControlMeta findControlByFileName(Object owner, String fileName) {
-        List<FileControlMeta> controls = readControls(owner);
-        String normalized = normalizeName(fileName);
-        for (FileControlMeta control : controls) {
-            if (normalized.equals(normalizeName(control.fileName))) {
-                return control;
-            }
+        if (owner == null) {
+            return null;
         }
-        return controls.isEmpty() ? null : controls.get(0);
+        String normalized = normalizeName(fileName);
+        Map<String, FileControlMeta> controls = CONTROL_BY_FILE_CACHE.computeIfAbsent(owner.getClass(), type -> {
+            Map<String, FileControlMeta> byFile = new ConcurrentHashMap<>();
+            for (FileControlMeta control : readControls(type)) {
+                byFile.put(normalizeName(control.fileName), control);
+            }
+            return byFile;
+        });
+        FileControlMeta meta = controls.get(normalized);
+        if (meta != null) {
+            return meta;
+        }
+        List<FileControlMeta> all = readControls(owner.getClass());
+        return all.isEmpty() ? null : all.get(0);
     }
 
     private static FileControlMeta findControlByRecordName(Object owner, String recordName) {
-        List<FileControlMeta> controls = readControls(owner);
-        String normalized = normalizeName(recordName);
-        for (FileControlMeta control : controls) {
-            if (normalized.equals(normalizeName(control.recordAreaName))) {
-                return control;
-            }
-        }
-        return controls.isEmpty() ? null : controls.get(0);
-    }
-
-    private static List<FileControlMeta> readControls(Object owner) {
         if (owner == null) {
-            return List.of();
+            return null;
         }
-        return CONTROLS_CACHE.computeIfAbsent(owner.getClass(), FileCtl::readControlsForClass);
+        String normalized = normalizeName(recordName);
+        Map<String, FileControlMeta> controls = CONTROL_BY_RECORD_CACHE.computeIfAbsent(owner.getClass(), type -> {
+            Map<String, FileControlMeta> byRecord = new ConcurrentHashMap<>();
+            for (FileControlMeta control : readControls(type)) {
+                byRecord.put(normalizeName(control.recordAreaName), control);
+            }
+            return byRecord;
+        });
+        FileControlMeta meta = controls.get(normalized);
+        if (meta != null) {
+            return meta;
+        }
+        List<FileControlMeta> all = readControls(owner.getClass());
+        return all.isEmpty() ? null : all.get(0);
     }
 
-    private static List<FileControlMeta> readControlsForClass(Class<?> ownerClass) {
+    private static List<FileControlMeta> readControls(Class<?> ownerType) {
+        return CONTROL_CACHE.computeIfAbsent(ownerType, FileCtl::loadControls);
+    }
+
+    private static List<FileControlMeta> loadControls(Class<?> ownerType) {
         List<FileControlMeta> result = new ArrayList<>();
+        if (ownerType == null) {
+            return result;
+        }
         try {
-            Field envField = ownerClass.getDeclaredField("ENV_FILE_CONTROLS");
+            Field envField = ownerType.getDeclaredField("ENV_FILE_CONTROLS");
             envField.setAccessible(true);
             Object envValue = envField.get(null);
             if (!(envValue instanceof List<?> controls)) {
@@ -343,7 +329,7 @@ public final class FileCtl {
             }
         } catch (Exception ignored) {
         }
-        return List.copyOf(result);
+        return result;
     }
 
     private static String readPublicField(Object target, String fieldName) {
@@ -389,16 +375,11 @@ public final class FileCtl {
         if (recordObj == null) {
             return null;
         }
+        if (recordKeyName == null || recordKeyName.isBlank() || "null".equalsIgnoreCase(recordKeyName.trim())) {
+            return null;
+        }
         Field keyField = null;
-        if (hasRecordKey(recordKeyName)) {
-            keyField = findField(recordObj.getClass(), toJavaFieldName(recordKeyName));
-        }
-        if (keyField == null) {
-            Field[] fields = recordObj.getClass().getDeclaredFields();
-            if (fields.length > 0) {
-                keyField = fields[0];
-            }
-        }
+        keyField = findField(recordObj.getClass(), toJavaFieldName(recordKeyName));
         if (keyField == null) {
             return null;
         }
@@ -409,23 +390,6 @@ public final class FileCtl {
         } catch (Exception ignored) {
             return null;
         }
-    }
-
-    private static boolean hasRecordKey(String recordKeyName) {
-        if (recordKeyName == null) {
-            return false;
-        }
-        String normalized = recordKeyName.trim();
-        return !normalized.isEmpty() && !"null".equalsIgnoreCase(normalized);
-    }
-
-    private static String nextSequentialKey(LinkedHashMap<String, Object> store) {
-        int next = store == null ? 1 : store.size() + 1;
-        String key;
-        do {
-            key = String.format("%020d", next++);
-        } while (store != null && store.containsKey(key));
-        return key;
     }
 
     private static Object cloneRecord(Object source) {
@@ -463,17 +427,15 @@ public final class FileCtl {
         if (type == null || fieldName == null || fieldName.isEmpty()) {
             return null;
         }
-        FieldLookupKey key = new FieldLookupKey(type, fieldName);
-        Field cached = FIELD_CACHE.get(key);
-        if (cached != null) {
-            return cached;
+        String cacheKey = type.getName() + "#" + fieldName;
+        if (FIELD_CACHE.containsKey(cacheKey)) {
+            return FIELD_CACHE.get(cacheKey);
         }
         Class<?> cursor = type;
         while (cursor != null) {
             try {
                 Field field = cursor.getDeclaredField(fieldName);
-                field.setAccessible(true);
-                FIELD_CACHE.put(key, field);
+                FIELD_CACHE.put(cacheKey, field);
                 return field;
             } catch (NoSuchFieldException ignored) {
                 cursor = cursor.getSuperclass();
@@ -574,6 +536,33 @@ public final class FileCtl {
         }
         char statusClass = statusCode.charAt(0);
         return statusClass == '3' || statusClass == '4' || statusClass == '9';
+    }
+
+    private static boolean sequential(FileControlMeta meta) {
+        return meta == null
+                || meta.recordKeyName == null
+                || meta.recordKeyName.isBlank()
+                || "null".equalsIgnoreCase(meta.recordKeyName.trim());
+    }
+
+    private static String nextSequentialKey(LinkedHashMap<String, Object> store) {
+        return "__SEQ__" + store.size();
+    }
+
+    private static Object nextSequentialRecord(Object owner, FileControlMeta meta, LinkedHashMap<String, Object> store) {
+        String fileKey = fileStoreKey(owner, meta.fileName);
+        int position = READ_POSITIONS.getOrDefault(fileKey, 0);
+        if (position < 0 || position >= store.size()) {
+            return null;
+        }
+        int index = 0;
+        for (Object row : store.values()) {
+            if (index++ == position) {
+                READ_POSITIONS.put(fileKey, position + 1);
+                return row;
+            }
+        }
+        return null;
     }
 
     private static String normalizeName(String name) {
