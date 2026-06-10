@@ -176,13 +176,13 @@ public final class FileCtl {
         if (meta == null) {
             return false;
         }
-        String key = extractKey(recordObj, meta.recordKeyName);
+        LinkedHashMap<String, Object> store = COBOL_FILES.computeIfAbsent(fileStoreKey(owner, meta.fileName),
+                ignored -> new LinkedHashMap<>());
+        String key = hasRecordKey(meta.recordKeyName) ? extractKey(recordObj, meta.recordKeyName) : nextSequentialKey(store);
         if (key == null) {
             setFileStatus(owner, meta, "23");
             return false;
         }
-        LinkedHashMap<String, Object> store = COBOL_FILES.computeIfAbsent(fileStoreKey(owner, meta.fileName),
-                ignored -> new LinkedHashMap<>());
         if (store.containsKey(key)) {
             setFileStatus(owner, meta, "22");
             return false;
@@ -364,7 +364,7 @@ public final class FileCtl {
             return null;
         }
         Field keyField = null;
-        if (recordKeyName != null && !recordKeyName.isEmpty()) {
+        if (hasRecordKey(recordKeyName)) {
             keyField = findField(recordObj.getClass(), toJavaFieldName(recordKeyName));
         }
         if (keyField == null) {
@@ -383,6 +383,23 @@ public final class FileCtl {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private static boolean hasRecordKey(String recordKeyName) {
+        if (recordKeyName == null) {
+            return false;
+        }
+        String normalized = recordKeyName.trim();
+        return !normalized.isEmpty() && !"null".equalsIgnoreCase(normalized);
+    }
+
+    private static String nextSequentialKey(LinkedHashMap<String, Object> store) {
+        int next = store == null ? 1 : store.size() + 1;
+        String key;
+        do {
+            key = String.format("%020d", next++);
+        } while (store != null && store.containsKey(key));
+        return key;
     }
 
     private static Object cloneRecord(Object source) {
@@ -472,12 +489,17 @@ public final class FileCtl {
     private static Field findFallbackStatusField(Class<?> ownerClass) {
         for (Field candidate : ownerClass.getDeclaredFields()) {
             String name = candidate.getName().toLowerCase();
-            if (name.contains("status")) {
+            if (name.contains("status") && isStatusLeafField(candidate)) {
                 candidate.setAccessible(true);
                 return candidate;
             }
         }
         return null;
+    }
+
+    private static boolean isStatusLeafField(Field field) {
+        Class<?> type = field.getType();
+        return type == String.class || type == Integer.class || type == int.class;
     }
 
     /**

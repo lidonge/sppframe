@@ -287,6 +287,9 @@ public class Util {
         if (src == null || target == null) {
             return target;
         }
+        if (isTextToGroupCopy(src, target)) {
+            return (U) copyTextToGroup(copyString(src), target);
+        }
         if (target != null && !target.getClass().isInstance(src)) {
             return copySameField((Object) src, target);
         }
@@ -320,6 +323,14 @@ public class Util {
         }
           
         return (U) src;
+    }
+
+    private static boolean isTextToGroupCopy(Object src, Object target) {
+        return src instanceof String
+                && target != null
+                && !target.getClass().isArray()
+                && !isSimpleType(target.getClass())
+                && !(target instanceof AbstractCobolRedefines<?>);
     }
 
     public static BigDecimal bigDecimalValue(Object value) {
@@ -591,6 +602,123 @@ public class Util {
             }
         }
         return target;
+    }
+
+    private static <T> T copyTextToGroup(String src, T target) {
+        if (target == null) {
+            return null;
+        }
+        copyTextToGroup(src == null ? "" : src, target, new int[] {0});
+        return target;
+    }
+
+    private static void copyTextToGroup(String src, Object target, int[] offset) {
+        if (target == null || isSimpleType(target.getClass()) || target.getClass().isArray()) {
+            return;
+        }
+        Map<String, Boolean> populatedStorages = new LinkedHashMap<>();
+        for (Field field : target.getClass().getDeclaredFields()) {
+            if (skipField(field)) {
+                continue;
+            }
+            field.setAccessible(true);
+            try {
+                if (isStorageField(field)) {
+                    populateStorageField(src, target, field, offset);
+                    populatedStorages.put(storageKey(field.getName()), Boolean.TRUE);
+                    continue;
+                }
+                if (isRedefinesViewField(field, populatedStorages)) {
+                    continue;
+                }
+                if (!populatedStorages.isEmpty() && field.getAnnotation(FieldInfo.class) == null) {
+                    continue;
+                }
+                Object fieldValue = field.get(target);
+                int length = declaredLength(field, fieldValue);
+                if (length > 0 && isCopyableLeaf(field, fieldValue)) {
+                    Object copied = copyTextSlice(src, offset, length, fieldValue, field.getType());
+                    if (copied != null || !field.getType().isPrimitive()) {
+                        field.set(target, copied);
+                    }
+                    continue;
+                }
+                if (fieldValue == null && !isSimpleType(field.getType()) && !field.getType().isArray()) {
+                    fieldValue = instantiate(field.getType());
+                    if (fieldValue != null) {
+                        initializeObject(fieldValue);
+                        field.set(target, fieldValue);
+                    }
+                }
+                copyTextToGroup(src, fieldValue, offset);
+            } catch (IllegalAccessException ignored) {
+            }
+        }
+    }
+
+    private static void populateStorageField(String src, Object target, Field field, int[] offset)
+            throws IllegalAccessException {
+        byte[] storage = (byte[]) field.get(target);
+        int length = storage == null ? declaredLength(field, null) : storage.length;
+        if (length <= 0) {
+            return;
+        }
+        if (storage == null) {
+            storage = new byte[length];
+            field.set(target, storage);
+        }
+        byte[] bytes = padRight(slice(src, offset[0], length), length, ' ').getBytes(StandardCharsets.UTF_8);
+        Arrays.fill(storage, (byte) ' ');
+        System.arraycopy(bytes, 0, storage, 0, Math.min(bytes.length, storage.length));
+        offset[0] += length;
+    }
+
+    private static boolean isCopyableLeaf(Field field, Object fieldValue) {
+        Class<?> type = field.getType();
+        return type == String.class
+                || type.isPrimitive()
+                || isNumericWrapper(type)
+                || type == BigDecimal.class
+                || type == BigInteger.class
+                || AbstractCobolRedefines.class.isAssignableFrom(type)
+                || fieldValue instanceof AbstractCobolRedefines<?>;
+    }
+
+    private static Object copyTextSlice(String src, int[] offset, int length, Object targetValue, Class<?> targetType) {
+        String value = slice(src, offset[0], length);
+        offset[0] += length;
+        if (targetValue instanceof AbstractCobolRedefines<?> redef) {
+            redef.set(value);
+            return redef;
+        }
+        return copySimpleValue(value, targetValue, targetType);
+    }
+
+    private static String slice(String src, int start, int length) {
+        String text = src == null ? "" : src;
+        if (length <= 0 || start >= text.length()) {
+            return "";
+        }
+        int end = Math.min(text.length(), start + length);
+        return text.substring(start, end);
+    }
+
+    private static int declaredLength(Field field, Object value) {
+        if (value instanceof AbstractCobolRedefines<?> redef) {
+            return redef.getBytes().length;
+        }
+        FieldInfo fieldInfo = field.getAnnotation(FieldInfo.class);
+        if (fieldInfo != null) {
+            PictureSpec spec = parsePicture(fieldInfo.cobolType());
+            int length = picturePrecision(spec);
+            if (length > 0) {
+                return length;
+            }
+            if (fieldInfo.precision() > 0) {
+                return fieldInfo.precision();
+            }
+        }
+        return 0;
     }
 
     public static String initString(boolean isAll, Integer precision, String str) {
