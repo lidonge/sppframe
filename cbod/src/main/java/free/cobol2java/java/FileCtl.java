@@ -10,6 +10,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class FileCtl {
     private static final Map<String, LinkedHashMap<String, Object>> COBOL_FILES = new ConcurrentHashMap<>();
     private static final Map<String, String> OPEN_MODES = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, List<FileControlMeta>> CONTROLS_CACHE = new ConcurrentHashMap<>();
+    private static final Map<FieldLookupKey, Field> FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Field> FALLBACK_STATUS_FIELD_CACHE = new ConcurrentHashMap<>();
     private static final ThreadLocal<UseFrame> USE_PROCEDURES = ThreadLocal.withInitial(UseFrame::new);
     private static final ThreadLocal<Boolean> DISPATCHING = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
@@ -33,6 +36,33 @@ public final class FileCtl {
         String recordAreaName;
         String recordKeyName;
         String statusFieldName;
+    }
+
+    private static final class FieldLookupKey {
+        private final Class<?> type;
+        private final String fieldName;
+
+        private FieldLookupKey(Class<?> type, String fieldName) {
+            this.type = type;
+            this.fieldName = fieldName;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof FieldLookupKey)) {
+                return false;
+            }
+            FieldLookupKey that = (FieldLookupKey) other;
+            return type.equals(that.type) && fieldName.equals(that.fieldName);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * type.hashCode() + fieldName.hashCode();
+        }
     }
 
     /**
@@ -95,6 +125,9 @@ public final class FileCtl {
     public static void reset() {
         COBOL_FILES.clear();
         OPEN_MODES.clear();
+        CONTROLS_CACHE.clear();
+        FIELD_CACHE.clear();
+        FALLBACK_STATUS_FIELD_CACHE.clear();
         clearUseProcedures();
     }
 
@@ -256,12 +289,16 @@ public final class FileCtl {
     }
 
     private static List<FileControlMeta> readControls(Object owner) {
-        List<FileControlMeta> result = new ArrayList<>();
         if (owner == null) {
-            return result;
+            return List.of();
         }
+        return CONTROLS_CACHE.computeIfAbsent(owner.getClass(), FileCtl::readControlsForClass);
+    }
+
+    private static List<FileControlMeta> readControlsForClass(Class<?> ownerClass) {
+        List<FileControlMeta> result = new ArrayList<>();
         try {
-            Field envField = owner.getClass().getDeclaredField("ENV_FILE_CONTROLS");
+            Field envField = ownerClass.getDeclaredField("ENV_FILE_CONTROLS");
             envField.setAccessible(true);
             Object envValue = envField.get(null);
             if (!(envValue instanceof List<?> controls)) {
@@ -280,7 +317,7 @@ public final class FileCtl {
             }
         } catch (Exception ignored) {
         }
-        return result;
+        return List.copyOf(result);
     }
 
     private static String readPublicField(Object target, String fieldName) {
@@ -383,10 +420,18 @@ public final class FileCtl {
         if (type == null || fieldName == null || fieldName.isEmpty()) {
             return null;
         }
+        FieldLookupKey key = new FieldLookupKey(type, fieldName);
+        Field cached = FIELD_CACHE.get(key);
+        if (cached != null) {
+            return cached;
+        }
         Class<?> cursor = type;
         while (cursor != null) {
             try {
-                return cursor.getDeclaredField(fieldName);
+                Field field = cursor.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                FIELD_CACHE.put(key, field);
+                return field;
             } catch (NoSuchFieldException ignored) {
                 cursor = cursor.getSuperclass();
             }
@@ -403,13 +448,7 @@ public final class FileCtl {
             field = findField(owner.getClass(), toJavaFieldName(meta.statusFieldName));
         }
         if (field == null) {
-            for (Field candidate : owner.getClass().getDeclaredFields()) {
-                String name = candidate.getName().toLowerCase();
-                if (name.contains("status")) {
-                    field = candidate;
-                    break;
-                }
-            }
+            field = FALLBACK_STATUS_FIELD_CACHE.computeIfAbsent(owner.getClass(), FileCtl::findFallbackStatusField);
             if (field == null) {
                 return;
             }
@@ -428,6 +467,17 @@ public final class FileCtl {
         } finally {
             maybeDispatchUseProcedure(owner, meta, statusCode);
         }
+    }
+
+    private static Field findFallbackStatusField(Class<?> ownerClass) {
+        for (Field candidate : ownerClass.getDeclaredFields()) {
+            String name = candidate.getName().toLowerCase();
+            if (name.contains("status")) {
+                candidate.setAccessible(true);
+                return candidate;
+            }
+        }
+        return null;
     }
 
     /**
