@@ -130,6 +130,11 @@ public final class FileCtl {
         setFileStatus(owner, meta, "00");
     }
 
+    public static void setFileStatusByFileName(Object owner, String fileName, String statusCode) {
+        FileControlMeta meta = findControlByFileName(owner, fileName);
+        setFileStatus(owner, meta, statusCode);
+    }
+
     public static boolean cobolWrite(Object owner, String recordName, Object recordObj) {
         if (owner == null || recordObj == null) {
             return false;
