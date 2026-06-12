@@ -236,6 +236,10 @@ public class Util {
         }
     }
 
+    public static Integer moveInteger(Object src) {
+        return copyInteger(src);
+    }
+
     public static Double copyDouble(Object src) {
         if (src == null) {
             return null;
@@ -255,6 +259,10 @@ public class Util {
         } catch (NumberFormatException ex) {
             return 0d;
         }
+    }
+
+    public static Double moveDouble(Object src) {
+        return copyDouble(src);
     }
 
     public static String copyString(Object src) {
@@ -280,6 +288,10 @@ public class Util {
             return renderArray(src, null, new IdentityHashMap<>());
         }
         return renderGroup(src, new IdentityHashMap<>());
+    }
+
+    public static String moveString(Object src) {
+        return copyString(src);
     }
 
     @SuppressWarnings("unchecked")
@@ -323,6 +335,10 @@ public class Util {
         }
           
         return (U) src;
+    }
+
+    public static <T, U> U move(T src, U target) {
+        return copy(src, target);
     }
 
     private static boolean isTextToGroupCopy(Object src, Object target) {
@@ -872,6 +888,10 @@ public class Util {
         }
     }
 
+    public static Long moveLong(Object src) {
+        return copyLong(src);
+    }
+
     public static Short copyShort(Object src) {
         if (src == null) {
             return null;
@@ -891,6 +911,10 @@ public class Util {
         } catch (NumberFormatException ex) {
             return (short) 0;
         }
+    }
+
+    public static Short moveShort(Object src) {
+        return copyShort(src);
     }
 
     public static Byte copyByte(Object src) {
@@ -914,6 +938,10 @@ public class Util {
         }
     }
 
+    public static Byte moveByte(Object src) {
+        return copyByte(src);
+    }
+
     public static Float copyFloat(Object src) {
         if (src == null) {
             return null;
@@ -933,6 +961,10 @@ public class Util {
         } catch (NumberFormatException ex) {
             return 0f;
         }
+    }
+
+    public static Float moveFloat(Object src) {
+        return copyFloat(src);
     }
 
     private static void initializeObject(Object instance) {
@@ -1579,6 +1611,18 @@ public class Util {
         return null;
     }
     public static <T> T setPtrAToPtrB(T ptrA, Object b){
+        return (T) b;
+    }
+
+    public static <T> T setPointerToNull(T ptr){
         return null;
+    }
+
+    public static <T> T writeBackReference(Object value, T current){
+        return copy(value, current);
+    }
+
+    public static <T> T computeAssign(Object value, T current){
+        return copy(value, current);
     }
 }
