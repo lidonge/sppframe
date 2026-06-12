@@ -341,6 +341,10 @@ public class Util {
         return copy(src, target);
     }
 
+    public static <T> T move(Object src, T target, Integer start, Integer length) {
+        return copy(src, target, start, length);
+    }
+
     private static boolean isTextToGroupCopy(Object src, Object target) {
         return src instanceof String
                 && target != null
