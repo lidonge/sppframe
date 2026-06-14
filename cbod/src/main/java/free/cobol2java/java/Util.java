@@ -341,6 +341,10 @@ public class Util {
         return copy(src, target);
     }
 
+    public static <T> T moveReferenceModification(Object src, T target, Integer start, Integer length) {
+        return copy(src, target, start, length);
+    }
+
     public static <T extends ICobolRedefines<?>> T move(Object src, T target) {
         if (target == null) {
             return null;
