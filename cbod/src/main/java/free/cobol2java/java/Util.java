@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Scanner;
 
-import free.cobol2java.java.redefines.AbstractCobolRedefines;
+import free.cobol2java.java.redefines.*;
 
 /**
  * Runtime helpers used by generated COBOL-to-Java programs.
@@ -339,6 +339,74 @@ public class Util {
 
     public static <T, U> U move(T src, U target) {
         return copy(src, target);
+    }
+
+    public static <T extends ICobolRedefines<?>> T move(Object src, T target) {
+        if (target == null) {
+            return null;
+        }
+        if (src instanceof ICobolRedefines<?> sourceView) {
+            target.set(sourceView);
+            return target;
+        }
+        if (target instanceof StringCobolRedefines stringView) {
+            stringView.set(moveString(expandMoveStringForRedefines(src, target)));
+            return target;
+        }
+        if (target instanceof IntegerCobolRedefines integerView) {
+            integerView.set(moveInteger(src));
+            return target;
+        }
+        if (target instanceof LongCobolRedefines longView) {
+            longView.set(moveLong(src));
+            return target;
+        }
+        if (target instanceof ShortCobolRedefines shortView) {
+            shortView.set(moveShort(src));
+            return target;
+        }
+        if (target instanceof ByteCobolRedefines byteView) {
+            byteView.set(moveByte(src));
+            return target;
+        }
+        if (target instanceof DoubleCobolRedefines doubleView) {
+            doubleView.set(moveDouble(src));
+            return target;
+        }
+        if (target instanceof FloatCobolRedefines floatView) {
+            floatView.set(moveFloat(src));
+            return target;
+        }
+        if (target instanceof BigDecimalCobolRedefines decimalView) {
+            decimalView.set(bigDecimalValue(src));
+            return target;
+        }
+        if (target instanceof BigIntegerCobolRedefines integerView) {
+            integerView.set(bigIntegerValue(src));
+            return target;
+        }
+        if (target instanceof AbstractCobolRedefines<?> redefines) {
+            redefines.set(moveString(expandMoveStringForRedefines(src, target)));
+        }
+        return target;
+    }
+
+    private static Object expandMoveStringForRedefines(Object src, ICobolRedefines<?> target) {
+        if (!(src instanceof CobolConstant constant)) {
+            return src;
+        }
+        int length = target.getBytes() == null ? 0 : target.getBytes().length;
+        if (length <= 0) {
+            return cobolConstantValue(constant);
+        }
+        return switch (constant) {
+            case SPACE, SPACES -> initString(true, length, " ");
+            case ZERO, ZEROS, ZEROES -> initString(true, length, "0");
+            case QUOTE, QUOTES -> initString(true, length, "\"");
+            case LOW_VALUE, LOW_VALUES -> initString(true, length, "\0");
+            case HIGH_VALUE, HIGH_VALUES -> initString(true, length, String.valueOf(Character.MAX_VALUE));
+            default -> cobolConstantValue(constant);
+        };
     }
 
     public static <T> T move(Object src, T target, Integer start, Integer length) {
