@@ -342,7 +342,7 @@ public class Util {
     }
 
     public static <T> T moveReferenceModification(Object src, T target, Integer start, Integer length) {
-        return copy(src, target, start, length);
+        return replaceReferenceModification(src, target, start, length);
     }
 
     public static <T extends ICobolRedefines<?>> T move(Object src, T target) {
@@ -609,6 +609,11 @@ public class Util {
 
     @SuppressWarnings("unchecked")
     public static <T> T copy(Object src, T target, Integer start, Integer length) {
+        return replaceReferenceModification(src, target, start, length);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T replaceReferenceModification(Object src, T target, Integer start, Integer length) {
         String sourceText = copyString(src);
         if (sourceText == null) {
             sourceText = "";
@@ -632,6 +637,10 @@ public class Util {
 
         if (target == null || target instanceof String) {
             return (T) builder.toString();
+        }
+        if (target instanceof AbstractCobolRedefines<?> redefines) {
+            redefines.set(builder.toString());
+            return target;
         }
         return copy(builder.toString(), target);
     }
