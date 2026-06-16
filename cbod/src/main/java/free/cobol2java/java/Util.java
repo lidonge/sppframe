@@ -123,6 +123,58 @@ public class Util {
         return instance;
     }
 
+    public static <T> T initialize(T target) {
+        if (target == null) {
+            return null;
+        }
+        if (target instanceof StringCobolRedefines stringView) {
+            stringView.set(initString(true, stringView.getBytes().length, " "));
+            return target;
+        }
+        if (target instanceof IntegerCobolRedefines integerView) {
+            integerView.set(0);
+            return target;
+        }
+        if (target instanceof LongCobolRedefines longView) {
+            longView.set(0L);
+            return target;
+        }
+        if (target instanceof ShortCobolRedefines shortView) {
+            shortView.set((short) 0);
+            return target;
+        }
+        if (target instanceof ByteCobolRedefines byteView) {
+            byteView.set((byte) 0);
+            return target;
+        }
+        if (target instanceof DoubleCobolRedefines doubleView) {
+            doubleView.set(0d);
+            return target;
+        }
+        if (target instanceof FloatCobolRedefines floatView) {
+            floatView.set(0f);
+            return target;
+        }
+        if (target instanceof BigDecimalCobolRedefines decimalView) {
+            decimalView.set(BigDecimal.ZERO);
+            return target;
+        }
+        if (target instanceof BigIntegerCobolRedefines integerView) {
+            integerView.set(BigInteger.ZERO);
+            return target;
+        }
+        if (target instanceof CharacterCobolRedefines characterView) {
+            characterView.set(' ');
+            return target;
+        }
+        if (target instanceof BooleanCobolRedefines booleanView) {
+            booleanView.set(false);
+            return target;
+        }
+        initializeObject(target);
+        return target;
+    }
+
     public static Object initValue(Class typeClass, int precision, int scale, Object value) {
         return initValue(typeClass, precision, scale, false, value);
     }
@@ -302,10 +354,6 @@ public class Util {
         if (isTextToGroupCopy(src, target)) {
             return (U) copyTextToGroup(copyString(src), target);
         }
-        if (target != null && !target.getClass().isInstance(src)) {
-            return copySameField((Object) src, target);
-        }
-
         if (target instanceof String) {
             return (U) copyString(src);
         }
@@ -332,6 +380,9 @@ public class Util {
         }
         if (target instanceof BigInteger) {
             return (U) bigIntegerValue(src);
+        }
+        if (target != null && !target.getClass().isInstance(src)) {
+            return copySameField((Object) src, target);
         }
           
         return (U) src;
