@@ -392,6 +392,44 @@ public class Util {
         return copy(src, target);
     }
 
+    @SuppressWarnings("unchecked")
+    public static <T> T copy(Object src, T target, Integer start, Integer length) {
+        return replaceReferenceModification(src, target, start, length);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T replaceReferenceModification(Object src, T target, Integer start, Integer length) {
+        String sourceText = copyString(src);
+        if (sourceText == null) {
+            sourceText = "";
+        }
+        String targetText = copyString(target);
+        if (targetText == null) {
+            targetText = "";
+        }
+
+        int begin = start == null ? 0 : Math.max(0, start - 1);
+        int copyLength = length == null ? sourceText.length() : Math.max(0, length);
+        StringBuilder builder = new StringBuilder(targetText);
+        while (builder.length() < begin) {
+            builder.append(' ');
+        }
+        while (builder.length() < begin + copyLength) {
+            builder.append(' ');
+        }
+        String chunk = padRight(sourceText, copyLength, ' ');
+        builder.replace(begin, begin + copyLength, chunk.substring(0, copyLength));
+
+        if (target == null || target instanceof String) {
+            return (T) builder.toString();
+        }
+        if (target instanceof AbstractCobolRedefines<?> redefines) {
+            redefines.set(builder.toString());
+            return target;
+        }
+        return copy(builder.toString(), target);
+    }
+
     public static <T> T moveReferenceModification(Object src, T target, Integer start, Integer length) {
         return replaceReferenceModification(src, target, start, length);
     }
@@ -477,30 +515,7 @@ public class Util {
     }
 
     public static BigDecimal bigDecimalValue(Object value) {
-        if (value == null) {
-            return BigDecimal.ZERO;
-        }
-        if (value instanceof BigDecimal decimal) {
-            return decimal;
-        }
-        if (value instanceof BigInteger integer) {
-            return new BigDecimal(integer);
-        }
-        if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long) {
-            return BigDecimal.valueOf(((Number) value).longValue());
-        }
-        if (value instanceof Float || value instanceof Double) {
-            return BigDecimal.valueOf(((Number) value).doubleValue());
-        }
-        String text = normalizeNumericText(value);
-        if (text == null || text.isEmpty()) {
-            return BigDecimal.ZERO;
-        }
-        try {
-            return new BigDecimal(text);
-        } catch (NumberFormatException ex) {
-            return BigDecimal.ZERO;
-        }
+        return CobolNumeric.bigDecimalValue(value);
     }
 
     public static BigInteger bigIntegerValue(Object value) {
@@ -656,44 +671,6 @@ public class Util {
 
     public static boolean equalsTo(Object left, Object right) {
         return compare(left, right) == 0;
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <T> T copy(Object src, T target, Integer start, Integer length) {
-        return replaceReferenceModification(src, target, start, length);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> T replaceReferenceModification(Object src, T target, Integer start, Integer length) {
-        String sourceText = copyString(src);
-        if (sourceText == null) {
-            sourceText = "";
-        }
-        String targetText = copyString(target);
-        if (targetText == null) {
-            targetText = "";
-        }
-
-        int begin = start == null ? 0 : Math.max(0, start - 1);
-        int copyLength = length == null ? sourceText.length() : Math.max(0, length);
-        StringBuilder builder = new StringBuilder(targetText);
-        while (builder.length() < begin) {
-            builder.append(' ');
-        }
-        while (builder.length() < begin + copyLength) {
-            builder.append(' ');
-        }
-        String chunk = padRight(sourceText, copyLength, ' ');
-        builder.replace(begin, begin + copyLength, chunk.substring(0, copyLength));
-
-        if (target == null || target instanceof String) {
-            return (T) builder.toString();
-        }
-        if (target instanceof AbstractCobolRedefines<?> redefines) {
-            redefines.set(builder.toString());
-            return target;
-        }
-        return copy(builder.toString(), target);
     }
 
     public static <T> T cast(Class<T> castTo, Object from) {
@@ -906,14 +883,7 @@ public class Util {
     }
 
     public static boolean isNumeric(Object value) {
-        if (value == null) {
-            return false;
-        }
-        if (value instanceof Number) {
-            return true;
-        }
-        String text = normalizeNumericText(value);
-        return text != null && text.matches("[+-]?\\d+(\\.\\d+)?");
+        return CobolNumeric.isNumeric(value);
     }
 
     public static boolean isAlphabetic(Object value) {

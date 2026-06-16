@@ -2,7 +2,10 @@ package free.cobol2java.java;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+
+import free.cobol2java.java.redefines.AbstractCobolRedefines;
 
 public final class CobolNumeric {
     private CobolNumeric() {
@@ -40,6 +43,113 @@ public final class CobolNumeric {
         return new BigInteger(numericText(value));
     }
 
+    public static BigDecimal bigDecimalValue(Object value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (value instanceof BigInteger integer) {
+            return new BigDecimal(integer);
+        }
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long) {
+            return BigDecimal.valueOf(((Number) value).longValue());
+        }
+        if (value instanceof Float || value instanceof Double) {
+            return BigDecimal.valueOf(((Number) value).doubleValue());
+        }
+        String text = normalizeNumericText(value);
+        if (text == null || text.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            return new BigDecimal(text);
+        } catch (NumberFormatException ex) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    public static boolean isNumeric(Object value) {
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof Number) {
+            return true;
+        }
+        String text = normalizeNumericText(value);
+        return text != null && text.matches("[+-]?\\d+(\\.\\d+)?");
+    }
+
+    public static String displayText(Object value, int precision, int scale) {
+        if (value == null) {
+            return "0".repeat(precision);
+        }
+        BigDecimal number;
+        if (value instanceof BigDecimal bigDecimal) {
+            number = bigDecimal;
+        } else if (value instanceof BigInteger bigInteger) {
+            number = new BigDecimal(bigInteger);
+        } else if (value instanceof Number numberValue) {
+            number = BigDecimal.valueOf(numberValue.longValue());
+        } else {
+            try {
+                number = new BigDecimal(value.toString().trim());
+            } catch (RuntimeException ignored) {
+                return "0".repeat(precision);
+            }
+        }
+        boolean negative = number.signum() < 0;
+        String digits = number.movePointRight(Math.max(scale, 0)).abs()
+                .setScale(0, java.math.RoundingMode.DOWN).toPlainString();
+        if (digits.length() < precision) {
+            digits = "0".repeat(precision - digits.length()) + digits;
+        } else if (digits.length() > precision) {
+            digits = digits.substring(digits.length() - precision);
+        }
+        return negative && precision > 0 ? "-" + digits.substring(1) : digits;
+    }
+
+    public static BigDecimal decimalValue(String value, int scale) {
+        String text = value == null ? "" : value.trim();
+        if (text.isEmpty()) {
+            return BigDecimal.ZERO.setScale(scale);
+        }
+        try {
+            return new BigDecimal(text).movePointLeft(Math.max(scale, 0)).setScale(scale);
+        } catch (RuntimeException ignored) {
+            return BigDecimal.ZERO.setScale(scale);
+        }
+    }
+
+    public static BigInteger bigIntegerValue(String value) {
+        String text = value == null ? "" : value.trim();
+        if (text.isEmpty()) {
+            return BigInteger.ZERO;
+        }
+        try {
+            return new BigInteger(text);
+        } catch (RuntimeException ignored) {
+            return BigInteger.ZERO;
+        }
+    }
+
+    public static int intValue(String value) {
+        return bigIntegerValue(value).intValue();
+    }
+
+    public static long longValue(String value) {
+        return bigIntegerValue(value).longValue();
+    }
+
+    public static short shortValue(String value) {
+        return bigIntegerValue(value).shortValue();
+    }
+
+    public static byte byteValue(String value) {
+        return bigIntegerValue(value).byteValue();
+    }
+
     public static String numericText(Object value) {
         if (value == null) {
             return "0";
@@ -53,6 +163,39 @@ public final class CobolNumeric {
             return weekday;
         }
         return text;
+    }
+
+    private static String normalizeNumericText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = copyStringWithoutGroup(value);
+        if (text == null) {
+            return null;
+        }
+        return text.trim();
+    }
+
+    private static String copyStringWithoutGroup(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String str) {
+            return str;
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal.toPlainString();
+        }
+        if (value instanceof BigInteger integer) {
+            return integer.toString();
+        }
+        if (value instanceof Number || value instanceof Boolean || value instanceof Character || value instanceof Enum<?>) {
+            return value.toString();
+        }
+        if (value instanceof AbstractCobolRedefines<?> redef) {
+            return new String(redef.getBytes(), StandardCharsets.UTF_8);
+        }
+        return value.toString();
     }
 
     private static String weekdayNumber(String text) {
