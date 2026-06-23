@@ -25,6 +25,10 @@ import free.cobol2java.java.redefines.*;
 public class Util {
     private static final String ALL_MARKER_PREFIX = "\u0000ALL:";
     private static final int DEFAULT_REDEFINES_STORAGE_SIZE = 4096;
+    private static final Map<String, PictureSpec> PICTURE_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Set<String> PICTURE_MISS_CACHE = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final Map<Class<?>, Map<String, Field>> FIELDS_BY_NAME_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<Class<?>, Field[]> COPYABLE_FIELDS_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static void output(Object... args) {
         if (args == null || args.length == 0) {
@@ -690,12 +694,9 @@ public class Util {
         }
 
         Map<String, Field> sourceFields = fieldsByName(src.getClass());
-        for (Field targetField : target.getClass().getDeclaredFields()) {
-            if (skipField(targetField)) {
-                continue;
-            }
+        for (Field targetField : copyableFields(target.getClass())) {
             Field sourceField = sourceFields.get(targetField.getName());
-            if (sourceField == null || skipField(sourceField)) {
+            if (sourceField == null) {
                 continue;
             }
             try {
@@ -1405,6 +1406,7 @@ public class Util {
     private static boolean skipField(Field field) {
         return field.isSynthetic()
                 || Modifier.isStatic(field.getModifiers())
+                || Modifier.isFinal(field.getModifiers())
                 || field.getName().startsWith("this$")
                 || field.getName().contains("$");
     }
@@ -1437,13 +1439,33 @@ public class Util {
     }
 
     private static Map<String, Field> fieldsByName(Class<?> type) {
+        return FIELDS_BY_NAME_CACHE.computeIfAbsent(type, Util::fieldsByNameUncached);
+    }
+
+    private static Map<String, Field> fieldsByNameUncached(Class<?> type) {
         Map<String, Field> fields = new LinkedHashMap<>();
         for (Field field : type.getDeclaredFields()) {
             if (!skipField(field)) {
+                field.setAccessible(true);
                 fields.put(field.getName(), field);
             }
         }
         return fields;
+    }
+
+    private static Field[] copyableFields(Class<?> type) {
+        return COPYABLE_FIELDS_CACHE.computeIfAbsent(type, Util::copyableFieldsUncached);
+    }
+
+    private static Field[] copyableFieldsUncached(Class<?> type) {
+        java.util.List<Field> fields = new java.util.ArrayList<>();
+        for (Field field : type.getDeclaredFields()) {
+            if (!skipField(field)) {
+                field.setAccessible(true);
+                fields.add(field);
+            }
+        }
+        return fields.toArray(Field[]::new);
     }
 
     private static Object copyArrayValue(Object sourceValue, Object targetValue, Field targetField) {
@@ -1651,15 +1673,30 @@ public class Util {
         if (picture == null || picture.isBlank()) {
             return null;
         }
+        PictureSpec cached = PICTURE_CACHE.get(picture);
+        if (cached != null) {
+            return cached;
+        }
+        if (PICTURE_MISS_CACHE.contains(picture)) {
+            return null;
+        }
+        PictureSpec parsed = parsePictureUncached(picture);
+        if (parsed == null) {
+            PICTURE_MISS_CACHE.add(picture);
+        } else {
+            PICTURE_CACHE.put(picture, parsed);
+        }
+        return parsed;
+    }
+
+    private static PictureSpec parsePictureUncached(String picture) {
         String normalized = picture.replace("PIC", "").replace("pic", "").replace(" ", "").toUpperCase();
-        String alphaNormalized = normalized.replaceAll("X\\(\\d+\\)", "X");
-        if (alphaNormalized.matches("X+")) {
+        if (isPictureOf(normalized, 'X', false)) {
             int alphaLength = countPictureLength(normalized, 'X');
             return new PictureSpec(alphaLength, 0, 0, false);
         }
 
-        String numericNormalized = normalized.replaceAll("9\\(\\d+\\)", "9").replace("S", "").replace("V", "");
-        if (numericNormalized.matches("9+")) {
+        if (isPictureOf(normalized, '9', true)) {
             int numericDigits = countPictureLength(normalized, '9');
             int scale = 0;
             int vIndex = normalized.indexOf('V');
@@ -1673,6 +1710,33 @@ public class Util {
             return new PictureSpec(normalized.length(), 0, 0, false);
         }
         return null;
+    }
+
+    private static boolean isPictureOf(String picture, char symbol, boolean numeric) {
+        boolean sawSymbol = false;
+        for (int i = 0; i < picture.length(); i++) {
+            char current = picture.charAt(i);
+            if (numeric && (current == 'S' || current == 'V')) {
+                continue;
+            }
+            if (current != symbol) {
+                return false;
+            }
+            sawSymbol = true;
+            if (i + 1 < picture.length() && picture.charAt(i + 1) == '(') {
+                int close = picture.indexOf(')', i + 2);
+                if (close <= i + 2) {
+                    return false;
+                }
+                for (int j = i + 2; j < close; j++) {
+                    if (!Character.isDigit(picture.charAt(j))) {
+                        return false;
+                    }
+                }
+                i = close;
+            }
+        }
+        return sawSymbol;
     }
 
     private static int countPictureLength(String picture, char symbol) {

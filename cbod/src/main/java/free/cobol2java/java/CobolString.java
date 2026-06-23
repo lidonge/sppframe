@@ -17,6 +17,8 @@ import free.cobol2java.java.redefines.AbstractCobolRedefines;
 
 public final class CobolString {
     private static final int DEFAULT_REDEFINES_STORAGE_SIZE = 4096;
+    private static final Map<String, PictureSpec> PICTURE_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Set<String> PICTURE_MISS_CACHE = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private CobolString() {
     }
@@ -547,14 +549,29 @@ public final class CobolString {
         if (picture == null || picture.isBlank()) {
             return null;
         }
+        PictureSpec cached = PICTURE_CACHE.get(picture);
+        if (cached != null) {
+            return cached;
+        }
+        if (PICTURE_MISS_CACHE.contains(picture)) {
+            return null;
+        }
+        PictureSpec parsed = parsePictureUncached(picture);
+        if (parsed == null) {
+            PICTURE_MISS_CACHE.add(picture);
+        } else {
+            PICTURE_CACHE.put(picture, parsed);
+        }
+        return parsed;
+    }
+
+    private static PictureSpec parsePictureUncached(String picture) {
         String normalized = picture.replace("PIC", "").replace("pic", "").replace(" ", "").toUpperCase();
-        String alphaNormalized = normalized.replaceAll("X\\(\\d+\\)", "X");
-        if (alphaNormalized.matches("X+")) {
+        if (isPictureOf(normalized, 'X', false)) {
             return new PictureSpec(countPictureLength(normalized, 'X'), 0, 0, false);
         }
 
-        String numericNormalized = normalized.replaceAll("9\\(\\d+\\)", "9").replace("S", "").replace("V", "");
-        if (numericNormalized.matches("9+")) {
+        if (isPictureOf(normalized, '9', true)) {
             int vIndex = normalized.indexOf('V');
             int scale = vIndex < 0 ? 0 : countPictureLength(normalized.substring(vIndex + 1), '9');
             return new PictureSpec(0, countPictureLength(normalized, '9'), scale, normalized.startsWith("S"));
@@ -564,6 +581,33 @@ public final class CobolString {
             return new PictureSpec(normalized.length(), 0, 0, false);
         }
         return null;
+    }
+
+    private static boolean isPictureOf(String picture, char symbol, boolean numeric) {
+        boolean sawSymbol = false;
+        for (int i = 0; i < picture.length(); i++) {
+            char current = picture.charAt(i);
+            if (numeric && (current == 'S' || current == 'V')) {
+                continue;
+            }
+            if (current != symbol) {
+                return false;
+            }
+            sawSymbol = true;
+            if (i + 1 < picture.length() && picture.charAt(i + 1) == '(') {
+                int close = picture.indexOf(')', i + 2);
+                if (close <= i + 2) {
+                    return false;
+                }
+                for (int j = i + 2; j < close; j++) {
+                    if (!Character.isDigit(picture.charAt(j))) {
+                        return false;
+                    }
+                }
+                i = close;
+            }
+        }
+        return sawSymbol;
     }
 
     private static int countPictureLength(String picture, char symbol) {

@@ -1,5 +1,7 @@
 package free.cobol2java.java.redefines;
 
+import free.cobol2java.java.CobolNumeric;
+
 /**
  * {@link Byte} 类型的 COBOL REDEFINES 视图实现。
  */
@@ -23,8 +25,7 @@ public class ByteCobolRedefines extends AbstractCobolRedefines<Byte> {
 
     @Override
     public Byte get() {
-        String value = readTrimmedString();
-        return value.isEmpty() ? 0 : Byte.parseByte(value);
+        return CobolNumeric.toByte(readTrimmedString());
     }
 
     @Override

@@ -2,6 +2,7 @@ package free.cobol2java.java.jcl;
 
 import free.cobol2java.java.IService;
 import free.cobol2java.java.ServiceManager;
+import free.cobol2java.java.CobolStopRunException;
 
 import java.lang.reflect.Constructor;
 import java.nio.file.Files;
@@ -51,7 +52,15 @@ public final class CobolProgramInvoker {
         if (service == null) {
             throw new IllegalStateException("Missing COBOL program service: " + serviceName);
         }
-        Object result = service.execute((Object[]) (args == null ? new String[0] : args));
+        Object result;
+        try {
+            result = service.execute((Object[]) (args == null ? new String[0] : args));
+        } catch (RuntimeException ex) {
+            if (CobolStopRunException.isStopRun(ex)) {
+                return JclReturnCodes.OK;
+            }
+            throw ex;
+        }
         Integer returnCode = ServiceManager.getReturnCode(service);
         if ((returnCode == null || returnCode == JclReturnCodes.OK) && result instanceof Number number) {
             return number.intValue();

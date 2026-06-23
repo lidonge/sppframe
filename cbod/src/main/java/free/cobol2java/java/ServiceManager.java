@@ -102,6 +102,9 @@ public class ServiceManager {
                     Object[] args = adaptArguments(method, parameters);
                     return method.invoke(target, args);
                 } catch (Exception e) {
+                    if (CobolStopRunException.isStopRun(e)) {
+                        return null;
+                    }
                     throw new IllegalStateException("Failed to invoke service " + targetClass.getName(), e);
                 }
             }

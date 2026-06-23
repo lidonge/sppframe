@@ -1,5 +1,7 @@
 package free.cobol2java.java.redefines;
 
+import free.cobol2java.java.CobolNumeric;
+
 /**
  * {@link Integer} 类型的 COBOL REDEFINES 视图实现。
  */
@@ -23,8 +25,7 @@ public class IntegerCobolRedefines extends AbstractCobolRedefines<Integer> {
 
     @Override
     public Integer get() {
-        String value = readTrimmedString();
-        return value.isEmpty() ? 0 : Integer.parseInt(value);
+        return CobolNumeric.toInteger(readTrimmedString());
     }
 
     @Override

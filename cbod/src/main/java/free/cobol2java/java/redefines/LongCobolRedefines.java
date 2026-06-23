@@ -1,5 +1,7 @@
 package free.cobol2java.java.redefines;
 
+import free.cobol2java.java.CobolNumeric;
+
 /**
  * {@link Long} 类型的 COBOL REDEFINES 视图实现。
  */
@@ -23,8 +25,7 @@ public class LongCobolRedefines extends AbstractCobolRedefines<Long> {
 
     @Override
     public Long get() {
-        String value = readTrimmedString();
-        return value.isEmpty() ? 0L : Long.parseLong(value);
+        return CobolNumeric.toLong(readTrimmedString());
     }
 
     @Override
@@ -40,8 +41,7 @@ public class LongCobolRedefines extends AbstractCobolRedefines<Long> {
         } else if (actual == null) {
             set(0L);
         } else {
-            String text = actual.toString().trim();
-            set(text.isEmpty() ? 0L : Long.parseLong(text));
+            set(CobolNumeric.toLong(actual));
         }
     }
 }

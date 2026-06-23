@@ -25,8 +25,7 @@ public class ShortCobolRedefines extends AbstractCobolRedefines<Short> {
 
     @Override
     public Short get() {
-        String value = readTrimmedString();
-        return value.isEmpty() ? 0 : Short.parseShort(value);
+        return CobolNumeric.toShort(readTrimmedString());
     }
 
     @Override

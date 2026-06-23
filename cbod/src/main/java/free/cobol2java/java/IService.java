@@ -50,6 +50,9 @@ public interface IService {
             return method.invoke(this, actualParameters);
 
         } catch (Exception e) {
+            if (CobolStopRunException.isStopRun(e)) {
+                return null;
+            }
             e.printStackTrace();
             return null;
         }

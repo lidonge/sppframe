@@ -47,6 +47,12 @@ public final class CobolNumeric {
         if (value == null) {
             return BigDecimal.ZERO;
         }
+        if (value instanceof CobolConstant constant) {
+            return switch (constant) {
+                case ZERO, ZEROS, ZEROES, SPACE, SPACES -> BigDecimal.ZERO;
+                default -> BigDecimal.ZERO;
+            };
+        }
         if (value instanceof BigDecimal decimal) {
             return decimal;
         }
@@ -59,15 +65,11 @@ public final class CobolNumeric {
         if (value instanceof Float || value instanceof Double) {
             return BigDecimal.valueOf(((Number) value).doubleValue());
         }
-        String text = normalizeNumericText(value);
+        String text = numericText(value);
         if (text == null || text.isEmpty()) {
             return BigDecimal.ZERO;
         }
-        try {
-            return new BigDecimal(text);
-        } catch (NumberFormatException ex) {
-            return BigDecimal.ZERO;
-        }
+        return new BigDecimal(text);
     }
 
     public static boolean isNumeric(Object value) {
@@ -78,7 +80,7 @@ public final class CobolNumeric {
             return true;
         }
         String text = normalizeNumericText(value);
-        return text != null && text.matches("[+-]?\\d+(\\.\\d+)?");
+        return isStandardNumber(text);
     }
 
     public static String displayText(Object value, int precision, int scale) {
@@ -162,7 +164,28 @@ public final class CobolNumeric {
         if (weekday != null) {
             return weekday;
         }
-        return text;
+        if (isStandardNumber(text)) {
+            return text;
+        }
+        StringBuilder digits = new StringBuilder(text.length());
+        boolean decimalSeen = false;
+        boolean signSeen = false;
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if ((ch == '+' || ch == '-') && !signSeen && digits.length() == 0) {
+                digits.append(ch);
+                signSeen = true;
+            } else if (ch >= '0' && ch <= '9') {
+                digits.append(ch);
+            } else if (ch == '.' && !decimalSeen) {
+                digits.append(ch);
+                decimalSeen = true;
+            }
+        }
+        String normalized = digits.toString();
+        return normalized.isEmpty() || "+".equals(normalized) || "-".equals(normalized) || ".".equals(normalized)
+                ? "0"
+                : normalized;
     }
 
     private static String normalizeNumericText(Object value) {
@@ -174,6 +197,29 @@ public final class CobolNumeric {
             return null;
         }
         return text.trim();
+    }
+
+    private static boolean isStandardNumber(String text) {
+        if (text == null || text.isEmpty()) {
+            return false;
+        }
+        int index = 0;
+        if (text.charAt(0) == '+' || text.charAt(0) == '-') {
+            index = 1;
+        }
+        boolean sawDigit = false;
+        boolean sawDecimal = false;
+        for (; index < text.length(); index++) {
+            char ch = text.charAt(index);
+            if (ch >= '0' && ch <= '9') {
+                sawDigit = true;
+            } else if (ch == '.' && !sawDecimal) {
+                sawDecimal = true;
+            } else {
+                return false;
+            }
+        }
+        return sawDigit;
     }
 
     private static String copyStringWithoutGroup(Object value) {

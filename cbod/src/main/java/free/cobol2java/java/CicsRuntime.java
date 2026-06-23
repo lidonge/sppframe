@@ -80,6 +80,9 @@ public final class CicsRuntime {
             service.execute(commarea, length);
             return status(null, 0, 0);
         } catch (Exception e) {
+            if (CobolStopRunException.isStopRun(e)) {
+                return status(null, 0, 0);
+            }
             throw new IllegalStateException("Failed to execute LINK program " + program, e);
         }
     }

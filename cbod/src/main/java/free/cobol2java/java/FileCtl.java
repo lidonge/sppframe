@@ -1,7 +1,9 @@
 package free.cobol2java.java;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,11 +13,15 @@ public final class FileCtl {
     private static final Map<String, LinkedHashMap<String, Object>> COBOL_FILES = new ConcurrentHashMap<>();
     private static final Map<String, String> OPEN_MODES = new ConcurrentHashMap<>();
     private static final Map<String, Integer> READ_POSITIONS = new ConcurrentHashMap<>();
+    private static final Map<String, Iterator<Object>> SEQUENTIAL_READ_CURSORS = new ConcurrentHashMap<>();
     private static final Map<Class<?>, List<FileControlMeta>> CONTROL_CACHE = new ConcurrentHashMap<>();
     private static final Map<Class<?>, Map<String, FileControlMeta>> CONTROL_BY_FILE_CACHE = new ConcurrentHashMap<>();
     private static final Map<Class<?>, Map<String, FileControlMeta>> CONTROL_BY_RECORD_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, Field> FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final java.util.Set<String> FIELD_MISS_CACHE = ConcurrentHashMap.newKeySet();
+    private static final Map<String, String> JAVA_FIELD_NAME_CACHE = new ConcurrentHashMap<>();
     private static final Map<Class<?>, Field> FALLBACK_STATUS_FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final sun.misc.Unsafe UNSAFE = findUnsafe();
     private static final ThreadLocal<UseFrame> USE_PROCEDURES = ThreadLocal.withInitial(UseFrame::new);
     private static final ThreadLocal<Boolean> DISPATCHING = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
@@ -102,10 +108,13 @@ public final class FileCtl {
         COBOL_FILES.clear();
         OPEN_MODES.clear();
         READ_POSITIONS.clear();
+        SEQUENTIAL_READ_CURSORS.clear();
         CONTROL_CACHE.clear();
         CONTROL_BY_FILE_CACHE.clear();
         CONTROL_BY_RECORD_CACHE.clear();
         FIELD_CACHE.clear();
+        FIELD_MISS_CACHE.clear();
+        JAVA_FIELD_NAME_CACHE.clear();
         FALLBACK_STATUS_FIELD_CACHE.clear();
         clearUseProcedures();
     }
@@ -122,6 +131,7 @@ public final class FileCtl {
         if ("OUTPUT".equals(normalizedMode)) {
             COBOL_FILES.put(fileKey, new LinkedHashMap<>());
             READ_POSITIONS.remove(fileKey);
+            SEQUENTIAL_READ_CURSORS.remove(fileKey);
             setFileStatus(owner, meta, "00");
             return;
         }
@@ -137,6 +147,7 @@ public final class FileCtl {
 
         if ("INPUT".equals(normalizedMode) || "I-O".equals(normalizedMode)) {
             READ_POSITIONS.put(fileKey, 0);
+            SEQUENTIAL_READ_CURSORS.remove(fileKey);
         }
         setFileStatus(owner, meta, "00");
     }
@@ -160,7 +171,8 @@ public final class FileCtl {
         if (meta == null) {
             return false;
         }
-        LinkedHashMap<String, Object> store = COBOL_FILES.computeIfAbsent(fileStoreKey(owner, meta.fileName),
+        String fileKey = fileStoreKey(owner, meta.fileName);
+        LinkedHashMap<String, Object> store = COBOL_FILES.computeIfAbsent(fileKey,
                 ignored -> new LinkedHashMap<>());
         String key = sequential(meta) ? nextSequentialKey(store) : extractKey(recordObj, meta.recordKeyName);
         if (key == null) {
@@ -233,7 +245,8 @@ public final class FileCtl {
         }
         Object recordArea = getRecordArea(owner, meta);
         String key = extractKey(recordArea, meta.recordKeyName);
-        LinkedHashMap<String, Object> store = COBOL_FILES.get(fileStoreKey(owner, meta.fileName));
+        String fileKey = fileStoreKey(owner, meta.fileName);
+        LinkedHashMap<String, Object> store = COBOL_FILES.get(fileKey);
         if (store == null || key == null || store.remove(key) == null) {
             setFileStatus(owner, meta, "23");
             return false;
@@ -397,7 +410,7 @@ public final class FileCtl {
             return null;
         }
         try {
-            Object target = source.getClass().getDeclaredConstructor().newInstance();
+            Object target = newRecordInstance(source.getClass());
             copyFields(source, target);
             return target;
         } catch (Exception ignored) {
@@ -405,17 +418,45 @@ public final class FileCtl {
         }
     }
 
+    private static Object newRecordInstance(Class<?> type) throws ReflectiveOperationException, InstantiationException {
+        if (UNSAFE != null) {
+            return UNSAFE.allocateInstance(type);
+        }
+        return type.getDeclaredConstructor().newInstance();
+    }
+
+    private static sun.misc.Unsafe findUnsafe() {
+        try {
+            Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            field.setAccessible(true);
+            return (sun.misc.Unsafe) field.get(null);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return null;
+        }
+    }
+
     private static void copyFields(Object source, Object target) {
         if (source == null || target == null) {
             return;
         }
+        boolean sameType = source.getClass() == target.getClass();
         for (Field field : source.getClass().getDeclaredFields()) {
             try {
+                int modifiers = field.getModifiers();
+                if (Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers)) {
+                    continue;
+                }
                 field.setAccessible(true);
                 Object value = field.get(source);
-                Field targetField = findField(target.getClass(), field.getName());
+                Field targetField = sameType ? field : findField(target.getClass(), field.getName());
                 if (targetField != null) {
-                    targetField.setAccessible(true);
+                    int targetModifiers = targetField.getModifiers();
+                    if (Modifier.isStatic(targetModifiers) || Modifier.isFinal(targetModifiers)) {
+                        continue;
+                    }
+                    if (targetField != field) {
+                        targetField.setAccessible(true);
+                    }
                     targetField.set(target, value);
                 }
             } catch (Exception ignored) {
@@ -428,8 +469,12 @@ public final class FileCtl {
             return null;
         }
         String cacheKey = type.getName() + "#" + fieldName;
-        if (FIELD_CACHE.containsKey(cacheKey)) {
-            return FIELD_CACHE.get(cacheKey);
+        Field cached = FIELD_CACHE.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        if (FIELD_MISS_CACHE.contains(cacheKey)) {
+            return null;
         }
         Class<?> cursor = type;
         while (cursor != null) {
@@ -441,6 +486,7 @@ public final class FileCtl {
                 cursor = cursor.getSuperclass();
             }
         }
+        FIELD_MISS_CACHE.add(cacheKey);
         return null;
     }
 
@@ -555,14 +601,13 @@ public final class FileCtl {
         if (position < 0 || position >= store.size()) {
             return null;
         }
-        int index = 0;
-        for (Object row : store.values()) {
-            if (index++ == position) {
-                READ_POSITIONS.put(fileKey, position + 1);
-                return row;
-            }
+        Iterator<Object> cursor = SEQUENTIAL_READ_CURSORS.computeIfAbsent(fileKey,
+                ignored -> new ArrayList<>(store.values()).iterator());
+        if (!cursor.hasNext()) {
+            return null;
         }
-        return null;
+        READ_POSITIONS.put(fileKey, position + 1);
+        return cursor.next();
     }
 
     private static String normalizeName(String name) {
@@ -573,19 +618,31 @@ public final class FileCtl {
         if (cobolName == null) {
             return "";
         }
-        String[] parts = cobolName.trim().toLowerCase().split("[-_\\s]+");
-        if (parts.length == 0) {
+        return JAVA_FIELD_NAME_CACHE.computeIfAbsent(cobolName, FileCtl::toJavaFieldNameUncached);
+    }
+
+    private static String toJavaFieldNameUncached(String cobolName) {
+        String trimmed = cobolName.trim();
+        if (trimmed.isEmpty()) {
             return "";
         }
-        StringBuilder sb = new StringBuilder(parts[0]);
-        for (int i = 1; i < parts.length; i++) {
-            if (parts[i].isEmpty()) {
+        StringBuilder sb = new StringBuilder(trimmed.length());
+        boolean capitalizeNext = false;
+        boolean wroteAny = false;
+        for (int i = 0; i < trimmed.length(); i++) {
+            char ch = trimmed.charAt(i);
+            if (ch == '-' || ch == '_' || Character.isWhitespace(ch)) {
+                capitalizeNext = wroteAny;
                 continue;
             }
-            sb.append(Character.toUpperCase(parts[i].charAt(0)));
-            if (parts[i].length() > 1) {
-                sb.append(parts[i].substring(1));
+            char lower = Character.toLowerCase(ch);
+            if (capitalizeNext) {
+                sb.append(Character.toUpperCase(lower));
+                capitalizeNext = false;
+            } else {
+                sb.append(lower);
             }
+            wroteAny = true;
         }
         return sb.toString();
     }

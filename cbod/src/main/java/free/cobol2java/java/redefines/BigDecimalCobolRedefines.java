@@ -3,6 +3,8 @@ package free.cobol2java.java.redefines;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
+import free.cobol2java.java.CobolNumeric;
+
 public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal> {
 
     public BigDecimalCobolRedefines(int length) {
@@ -130,8 +132,7 @@ public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal>
         } else if (actual == null) {
             set(BigDecimal.ZERO);
         } else {
-            String text = actual.toString().trim();
-            set(text.isEmpty() ? BigDecimal.ZERO : new BigDecimal(text));
+            set(CobolNumeric.bigDecimalValue(actual));
         }
     }
 
