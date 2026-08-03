@@ -1,5 +1,8 @@
 package free.cobol2java.java.redefines;
 
+import free.cobol2java.java.CobolConstant;
+import free.cobol2java.java.CobolString;
+
 /**
  * {@link String} 类型的 COBOL REDEFINES 视图实现。
  */
@@ -29,6 +32,10 @@ public class StringCobolRedefines extends AbstractCobolRedefines<String> {
     @Override
     public void set(String value) {
         writeString(value);
+    }
+
+    public void set(CobolConstant value) {
+        writeString(CobolString.value(value));
     }
 
     public StringCobolRedefines copy(Object value) {
