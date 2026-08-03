@@ -8,6 +8,10 @@ public final class CobolNumeric {
     private CobolNumeric() {
     }
 
+    public static boolean isNumeric(Object value) {
+        return Util.isNumeric(value);
+    }
+
     public static Integer toInteger(Object value) {
         return Integer.valueOf(numericText(value));
     }
