@@ -12,6 +12,10 @@ public final class CobolNumeric {
         return Util.isNumeric(value);
     }
 
+    public static BigDecimal bigDecimalValue(Object value) {
+        return Util.bigDecimalValue(value);
+    }
+
     public static Integer toInteger(Object value) {
         return Integer.valueOf(numericText(value));
     }
