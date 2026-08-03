@@ -30,6 +30,17 @@ public final class CobolString {
         if (value instanceof String str) {
             return str;
         }
+        if (value instanceof CobolConstant constant) {
+            return switch (constant) {
+                case SPACE, SPACES -> " ";
+                case ZERO, ZEROS, ZEROES -> "0";
+                case QUOTE, QUOTES -> "\"";
+                case LOW_VALUE, LOW_VALUES -> "\0";
+                case HIGH_VALUE, HIGH_VALUES -> String.valueOf(Character.MAX_VALUE);
+                case NULL, NULLS -> null;
+                default -> constant.name();
+            };
+        }
         if (value instanceof BigDecimal decimal) {
             return decimal.toPlainString();
         }
