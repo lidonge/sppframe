@@ -34,6 +34,10 @@ public class ShortCobolRedefines extends AbstractCobolRedefines<Short> {
         writeNumericString(String.valueOf(value == null ? 0 : value));
     }
 
+    public void set(int value) {
+        set(CobolNumeric.toShort(value));
+    }
+
     public ShortCobolRedefines copy(Object value) {
         set(CobolNumeric.toShort(value));
         return this;

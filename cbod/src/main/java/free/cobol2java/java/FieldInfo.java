@@ -33,4 +33,40 @@ public @interface FieldInfo {
 
     int scale() default 0;
 
+    boolean signed() default false;
+
+    String encoding() default "";
+
+    String fieldId() default "";
+
+    String cobolName() default "";
+
+    String sourceFile() default "";
+
+    int sourceLine() default -1;
+
+    int offset() default -1;
+
+    int byteLength() default -1;
+
+    int occursCount() default 1;
+
+    String odoFieldId() default "";
+
+    int elementByteLength() default -1;
+
+    int stride() default -1;
+
+    String storageGroupId() default "";
+
+    String redefinesFieldId() default "";
+
+    String canonicalFieldId() default "";
+
+    boolean filler() default false;
+
+    String storageBinding() default "";
+
+    String layoutSelector() default "";
+
 }

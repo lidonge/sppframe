@@ -16,7 +16,7 @@ public final class CobolRedefinesBuffer {
     private byte[] bytes;
 
     public CobolRedefinesBuffer(int size) {
-        this.bytes = new byte[Math.max(0, size)];
+        this.bytes = allocate(size);
     }
 
     public CobolRedefinesBuffer(byte[] bytes) {
@@ -32,10 +32,19 @@ public final class CobolRedefinesBuffer {
         return bytes.length;
     }
 
+    /** Allocates COBOL character storage initialized to SPACE, never Java NUL bytes. */
+    public static byte[] allocate(int size) {
+        byte[] storage = new byte[Math.max(0, size)];
+        Arrays.fill(storage, (byte) ' ');
+        return storage;
+    }
+
     /** 确保至少能容纳 {@code minSize} 个字节，必要时扩容并保留已有数据。 */
     public void ensureCapacity(int minSize) {
         if (minSize > bytes.length) {
+            int previousLength = bytes.length;
             bytes = Arrays.copyOf(bytes, minSize);
+            Arrays.fill(bytes, previousLength, bytes.length, (byte) ' ');
         }
     }
 }

@@ -778,6 +778,10 @@ public class Util {
                 if (isStorageField(field)) {
                     populateStorageField(src, target, field, offset);
                     populatedStorages.put(storageKey(field.getName()), Boolean.TRUE);
+                    String layoutStorageId = layoutStorageId(field);
+                    if (layoutStorageId != null) {
+                        populatedStorages.put(layoutStorageId, Boolean.TRUE);
+                    }
                     continue;
                 }
                 if (isRedefinesViewField(field, populatedStorages)) {
@@ -1332,6 +1336,10 @@ public class Util {
                         byte[] storage = (byte[]) field.get(value);
                         builder.append(storage == null ? "" : new String(storage, StandardCharsets.UTF_8));
                         renderedStorages.put(storageKey, Boolean.TRUE);
+                        String layoutStorageId = layoutStorageId(field);
+                        if (layoutStorageId != null) {
+                            renderedStorages.put(layoutStorageId, Boolean.TRUE);
+                        }
                     }
                     continue;
                 }
@@ -1445,6 +1453,13 @@ public class Util {
     }
 
     private static boolean isRedefinesViewField(Field field, Map<String, Boolean> renderedStorages) {
+        FieldInfo fieldInfo = field.getAnnotation(FieldInfo.class);
+        if (fieldInfo != null
+                && ("SHARED_VIEW".equals(fieldInfo.storageBinding())
+                || "CANONICAL_STORAGE".equals(fieldInfo.storageBinding()))
+                && renderedStorages.containsKey("@layout:" + fieldInfo.canonicalFieldId())) {
+            return true;
+        }
         if (!AbstractCobolRedefines.class.isAssignableFrom(field.getType())) {
             return false;
         }
@@ -1454,6 +1469,14 @@ public class Util {
             }
         }
         return false;
+    }
+
+    private static String layoutStorageId(Field field) {
+        FieldInfo fieldInfo = field.getAnnotation(FieldInfo.class);
+        if (fieldInfo == null || fieldInfo.canonicalFieldId().isBlank()) {
+            return null;
+        }
+        return "@layout:" + fieldInfo.canonicalFieldId();
     }
 
     private static String storageKey(String fieldName) {

@@ -4,21 +4,36 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 
 public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal> {
+    private final int scale;
 
     public BigDecimalCobolRedefines(int length) {
         super(length);
+        this.scale = 0;
     }
 
     public BigDecimalCobolRedefines(byte[] storage) {
         super(storage);
+        this.scale = 0;
     }
 
     public BigDecimalCobolRedefines(byte[] storage, int start, int length) {
         super(storage, start, length);
+        this.scale = 0;
+    }
+
+    public BigDecimalCobolRedefines(byte[] storage, int start, int length, int scale) {
+        super(storage, start, length);
+        this.scale = scale;
     }
 
     public BigDecimalCobolRedefines(CobolRedefinesBuffer storage, int start, int length) {
         super(storage, start, length);
+        this.scale = 0;
+    }
+
+    public BigDecimalCobolRedefines(CobolRedefinesBuffer storage, int start, int length, int scale) {
+        super(storage, start, length);
+        this.scale = scale;
     }
 
     @Override
@@ -63,7 +78,7 @@ public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal>
                 appendPackedDigit(digits, high);
                 boolean negative = low == 0x0D || low == 0x0B;
                 String number = normalizeDigits(digits);
-                return new BigDecimal((negative ? "-" : "") + number);
+                return new BigDecimal((negative ? "-" : "") + number).movePointLeft(scale);
             }
             appendPackedDigit(digits, high);
             appendPackedDigit(digits, low);
@@ -94,7 +109,8 @@ public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal>
     }
 
     private void writePackedDecimal(BigDecimal value) {
-        BigInteger unscaled = value.unscaledValue().abs();
+        BigDecimal scaled = value.setScale(scale);
+        BigInteger unscaled = scaled.unscaledValue().abs();
         String digits = unscaled.toString();
         int precision = length * 2 - 1;
         if (digits.length() > precision) {
@@ -111,7 +127,7 @@ public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal>
             int high = digitIndex < digits.length() ? digits.charAt(digitIndex++) - '0' : 0;
             int low;
             if (i == length - 1) {
-                low = value.signum() < 0 ? 0x0D : 0x0C;
+                low = scaled.signum() < 0 ? 0x0D : 0x0C;
             } else {
                 low = digitIndex < digits.length() ? digits.charAt(digitIndex++) - '0' : 0;
             }
