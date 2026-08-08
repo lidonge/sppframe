@@ -916,6 +916,13 @@ public class Util {
         if (value instanceof Number) {
             return true;
         }
+        if (value instanceof AbstractCobolRedefines<?> redef) {
+            try {
+                return isNumeric(redef.get());
+            } catch (RuntimeException invalidNumericStorage) {
+                return false;
+            }
+        }
         String text = normalizeNumericText(value);
         return text != null && text.matches("[+-]?\\d+(\\.\\d+)?");
     }

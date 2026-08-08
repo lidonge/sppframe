@@ -42,4 +42,18 @@ public class StringCobolRedefines extends AbstractCobolRedefines<String> {
         set(value == null ? "" : value.toString());
         return this;
     }
+
+    public boolean sameTextAs(Object value) {
+        return CobolString.equalsPadded(get(), value);
+    }
+
+    /** Tests whether this fixed-width character view is equal to COBOL SPACE/SPACES. */
+    public boolean isSpaces() {
+        return CobolString.equalsPadded(get(), " ");
+    }
+
+    public int compareTextTo(Object value) {
+        return CobolString.comparePadded(get(), value);
+    }
+
 }

@@ -44,6 +44,21 @@ public final class CobolString {
         return comparePadded(left, right) == 0;
     }
 
+    /** Readable public form of COBOL character equality; performs no wrapping or allocation. */
+    public static boolean sameText(Object left, Object right) {
+        return equalsPadded(left, right);
+    }
+
+    /** Readable public form of COBOL character ordering; performs no wrapping or allocation. */
+    public static int compareText(Object left, Object right) {
+        return comparePadded(left, right);
+    }
+
+    /** Tests a character value against COBOL SPACE/SPACES using padded semantics. */
+    public static boolean isSpaces(Object value) {
+        return equalsPadded(value, " ");
+    }
+
     public static String value(Object value) {
         if (value == null) {
             return null;

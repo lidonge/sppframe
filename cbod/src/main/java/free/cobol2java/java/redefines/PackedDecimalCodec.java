@@ -17,6 +17,10 @@ final class PackedDecimalCodec {
             int low = value & 0x0F;
             appendDigit(digits, high);
             if (i == start + length - 1) {
+                if (low != 0x0A && low != 0x0B && low != 0x0C
+                        && low != 0x0D && low != 0x0E && low != 0x0F) {
+                    throw new NumberFormatException("Invalid packed-decimal sign nibble: " + low);
+                }
                 negative = low == 0x0D || low == 0x0B;
             } else {
                 appendDigit(digits, low);
@@ -58,6 +62,8 @@ final class PackedDecimalCodec {
     private static void appendDigit(StringBuilder digits, int value) {
         if (value >= 0 && value <= 9) {
             digits.append((char) ('0' + value));
+            return;
         }
+        throw new NumberFormatException("Invalid packed-decimal digit nibble: " + value);
     }
 }

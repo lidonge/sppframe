@@ -1,7 +1,6 @@
 package free.cobol2java.java.redefines;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 
 public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal> {
     private final int scale;
@@ -68,39 +67,7 @@ public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal>
     }
 
     private BigDecimal readPackedDecimal() {
-        byte[] bytes = storage.bytes();
-        StringBuilder digits = new StringBuilder(length * 2 - 1);
-        for (int i = start; i < start + length; i++) {
-            int value = bytes[i] & 0xFF;
-            int high = (value >>> 4) & 0x0F;
-            int low = value & 0x0F;
-            if (i == start + length - 1) {
-                appendPackedDigit(digits, high);
-                boolean negative = low == 0x0D || low == 0x0B;
-                String number = normalizeDigits(digits);
-                return new BigDecimal((negative ? "-" : "") + number).movePointLeft(scale);
-            }
-            appendPackedDigit(digits, high);
-            appendPackedDigit(digits, low);
-        }
-        return BigDecimal.ZERO;
-    }
-
-    private void appendPackedDigit(StringBuilder digits, int value) {
-        if (value >= 0 && value <= 9) {
-            digits.append((char) ('0' + value));
-        }
-    }
-
-    private String normalizeDigits(StringBuilder digits) {
-        int index = 0;
-        while (index < digits.length() - 1 && digits.charAt(index) == '0') {
-            index++;
-        }
-        if (digits.length() == 0) {
-            return "0";
-        }
-        return digits.substring(index);
+        return PackedDecimalCodec.decode(storage.bytes(), start, length, scale);
     }
 
     @Override
@@ -109,31 +76,7 @@ public class BigDecimalCobolRedefines extends AbstractCobolRedefines<BigDecimal>
     }
 
     private void writePackedDecimal(BigDecimal value) {
-        BigDecimal scaled = value.setScale(scale);
-        BigInteger unscaled = scaled.unscaledValue().abs();
-        String digits = unscaled.toString();
-        int precision = length * 2 - 1;
-        if (digits.length() > precision) {
-            throw new ArithmeticException("Packed decimal value " + value.toPlainString()
-                    + " exceeds " + precision + " digits");
-        }
-        if (digits.length() < precision) {
-            digits = "0".repeat(precision - digits.length()) + digits;
-        }
-
-        byte[] encoded = new byte[length];
-        int digitIndex = 0;
-        for (int i = 0; i < length; i++) {
-            int high = digitIndex < digits.length() ? digits.charAt(digitIndex++) - '0' : 0;
-            int low;
-            if (i == length - 1) {
-                low = scaled.signum() < 0 ? 0x0D : 0x0C;
-            } else {
-                low = digitIndex < digits.length() ? digits.charAt(digitIndex++) - '0' : 0;
-            }
-            encoded[i] = (byte) ((high << 4) | low);
-        }
-        writeBytes(encoded);
+        PackedDecimalCodec.encode(storage.bytes(), start, length, scale, value);
     }
 
     @Override

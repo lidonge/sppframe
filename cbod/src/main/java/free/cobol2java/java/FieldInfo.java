@@ -69,4 +69,16 @@ public @interface FieldInfo {
 
     String layoutSelector() default "";
 
+    /** Stable identity shared by the read/write overloads of one generated accessor. */
+    String accessorId() default "";
+
+    /** READ, WRITE or PREDICATE for a generated semantic accessor. */
+    String accessMode() default "";
+
+    /** Number of COBOL subscripts accepted by the accessor. */
+    int dimensionCount() default 0;
+
+    /** Whether accessor indices retain COBOL one-based semantics. */
+    boolean oneBased() default false;
+
 }
