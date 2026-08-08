@@ -44,6 +44,10 @@ public abstract class AbstractCobolRedefines<T> implements ICobolRedefines<T> {
         this(storage, start, length, StandardCharsets.UTF_8);
     }
 
+    public CobolRedefinesBuffer storageBuffer() {
+        return storage;
+    }
+
     protected AbstractCobolRedefines(CobolRedefinesBuffer storage, int start, int length, Charset charset) {
         this.storage = Objects.requireNonNull(storage, "storage must not be null");
         this.charset = Objects.requireNonNull(charset, "charset must not be null");
