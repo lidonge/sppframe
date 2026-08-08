@@ -21,6 +21,29 @@ public final class CobolString {
     private CobolString() {
     }
 
+    /** Compares character operands using COBOL's right-space-padding rule. */
+    public static int comparePadded(Object left, Object right) {
+        String leftText = value(left);
+        String rightText = value(right);
+        if (leftText == rightText) {
+            return 0;
+        }
+        if (leftText == null) {
+            return -1;
+        }
+        if (rightText == null) {
+            return 1;
+        }
+        int length = Math.max(leftText.length(), rightText.length());
+        return leftText.concat(" ".repeat(length - leftText.length()))
+                .compareTo(rightText.concat(" ".repeat(length - rightText.length())));
+    }
+
+    /** Tests character operands using COBOL's right-space-padding rule. */
+    public static boolean equalsPadded(Object left, Object right) {
+        return comparePadded(left, right) == 0;
+    }
+
     public static String value(Object value) {
         if (value == null) {
             return null;

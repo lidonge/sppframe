@@ -4,6 +4,11 @@ package free.cobol2java.java;
  * COBOL group value that can receive whole-value and reference-modification moves.
  */
 public interface CobolGroup {
+    /** Returns the canonical COBOL character sequence used by group comparisons. */
+    static String stringValue(Object value) {
+        return Util.copyString(value);
+    }
+
     static <T> T copyInto(T target, Object source) {
         return Util.copy(source, target);
     }
