@@ -381,6 +381,10 @@ public class Util {
         if (target instanceof BigInteger) {
             return (U) bigIntegerValue(src);
         }
+        if (target instanceof StringCobolRedefines stringView) {
+            stringView.set(copyString(src));
+            return target;
+        }
         if (target != null && !target.getClass().isInstance(src)) {
             return copySameField((Object) src, target);
         }
@@ -759,6 +763,14 @@ public class Util {
     private static <T> T copyTextToGroup(String src, T target) {
         if (target == null) {
             return null;
+        }
+        if (target instanceof StringCobolRedefines stringView) {
+            // A generated group may itself be the canonical storage view.
+            // Writing its annotated child fields would consume the source
+            // once for the canonical field and again for every REDEFINES
+            // overlay.  Populate the bound buffer exactly once instead.
+            stringView.set(src == null ? "" : src);
+            return target;
         }
         copyTextToGroup(src == null ? "" : src, target, new int[] {0});
         return target;
