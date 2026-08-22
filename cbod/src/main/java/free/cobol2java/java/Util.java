@@ -473,7 +473,7 @@ public class Util {
     }
 
     private static boolean isTextToGroupCopy(Object src, Object target) {
-        return src instanceof String
+        return (src instanceof String || src instanceof CobolGroup)
                 && target != null
                 && !target.getClass().isArray()
                 && !isSimpleType(target.getClass())
