@@ -34,6 +34,11 @@ public final class CobolExpressionCalculator {
         T remainder(A left, B right);
     }
 
+    @FunctionalInterface
+    public interface Compare<T, A, B> {
+        T compare(A left, B right);
+    }
+
     public static <A extends Number, B extends Number> Add<BigInteger, A, B> bigIntegerAdd() {
         return (left, right) -> bigInteger(left).add(bigInteger(right));
     }
@@ -92,6 +97,14 @@ public final class CobolExpressionCalculator {
 
     public static <A, B> Add<String, A, B> stringAdd() {
         return (left, right) -> String.valueOf(left) + String.valueOf(right);
+    }
+
+    public static <A extends Number, B extends Number> Compare<Integer, A, B> numericCompare() {
+        return (left, right) -> bigDecimal(left).compareTo(bigDecimal(right));
+    }
+
+    public static <A, B> Compare<Integer, A, B> stringCompare() {
+        return (left, right) -> CobolString.compareText(String.valueOf(left), String.valueOf(right));
     }
 
     private static BigInteger bigInteger(Number value) {
