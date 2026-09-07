@@ -8,6 +8,42 @@ public final class CobolNumeric {
     private CobolNumeric() {
     }
 
+    public static final class SizeError extends ArithmeticException {
+        private SizeError(String message) {
+            super(message);
+        }
+    }
+
+    public static BigDecimal nonZeroDivisor(BigDecimal value) {
+        if (value.signum() == 0) throw new SizeError("Division by zero");
+        return value;
+    }
+
+    public static BigInteger nonZeroDivisor(BigInteger value) {
+        if (value.signum() == 0) throw new SizeError("Division by zero");
+        return value;
+    }
+
+    public static int nonZeroDivisor(int value) {
+        if (value == 0) throw new SizeError("Division by zero");
+        return value;
+    }
+
+    public static long nonZeroDivisor(long value) {
+        if (value == 0) throw new SizeError("Division by zero");
+        return value;
+    }
+
+    public static float nonZeroDivisor(float value) {
+        if (value == 0) throw new SizeError("Division by zero");
+        return value;
+    }
+
+    public static double nonZeroDivisor(double value) {
+        if (value == 0) throw new SizeError("Division by zero");
+        return value;
+    }
+
     public static boolean isNumeric(Object value) {
         return Util.isNumeric(value);
     }
@@ -42,6 +78,22 @@ public final class CobolNumeric {
 
     public static BigDecimal toBigDecimal(Object value) {
         return new BigDecimal(numericText(value));
+    }
+
+    /** Integer exponent only; negative powers use the existing decimal division precision. */
+    public static BigDecimal powIntegral(BigDecimal base, BigDecimal exponent) {
+        int integralExponent = exponent.intValueExact();
+        return integralExponent >= 0 ? base.pow(integralExponent)
+                : base.pow(integralExponent, java.math.MathContext.DECIMAL128);
+    }
+
+    /** Decimal exponentiation without binary floating-point intermediate values. */
+    public static BigDecimal powDecimal(BigDecimal base, BigDecimal exponent) {
+        if (exponent.remainder(BigDecimal.ONE).signum() == 0) {
+            return powIntegral(base, exponent);
+        }
+        return ch.obermuhlner.math.big.BigDecimalMath.pow(
+                base, exponent, java.math.MathContext.DECIMAL128);
     }
 
     public static BigInteger toBigInteger(Object value) {
