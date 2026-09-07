@@ -20,7 +20,10 @@ import jakarta.annotation.PostConstruct;
  */
 @Component
 public class ServiceManager {
+    private static final Map<String, Class<? extends IService>> BUILT_IN_SERVICES = Map.of(
+            "C3CUGCS", free.cobol2java.java.external.C3cugcs.class);
     private static final Map<Class<?>, IService> CLASS_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, IService> DYNAMIC_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, Integer> RETURN_CODES = new ConcurrentHashMap<>();
     private static IServiceContainer springServiceContainer;
 
@@ -37,7 +40,7 @@ public class ServiceManager {
         if (serviceClass == null || !IService.class.isAssignableFrom(serviceClass)) {
             return null;
         }
-        return serviceClass.cast(CLASS_CACHE.computeIfAbsent(serviceClass, ServiceManager::createReflectiveService));
+        return serviceClass.cast(CLASS_CACHE.computeIfAbsent(serviceClass, ServiceManager::createServiceInstance));
     }
 
     public static IService getService(String name) {
@@ -50,13 +53,31 @@ public class ServiceManager {
                 return iService;
             }
         }
+        Class<? extends IService> builtIn = BUILT_IN_SERVICES.get(name.trim());
+        if (builtIn != null) {
+            return getDynamicService(builtIn);
+        }
         for (String candidate : buildCandidateClassNames(name)) {
             try {
-                return getService((Class<? extends IService>) Class.forName(candidate));
+                Class<?> targetClass = Class.forName(candidate);
+                return getDynamicService(targetClass);
             } catch (ClassNotFoundException ignored) {
             }
         }
         return null;
+    }
+
+    private static IService getDynamicService(Class<?> targetClass) {
+        if (springServiceContainer != null) {
+            Object service = springServiceContainer.getService(targetClass);
+            if (service instanceof IService iService) {
+                return iService;
+            }
+        }
+        if (!IService.class.isAssignableFrom(targetClass)) {
+            return null;
+        }
+        return DYNAMIC_CACHE.computeIfAbsent(targetClass, ServiceManager::createReflectiveService);
     }
 
     public static IServiceContainer getServiceContainer(){
@@ -70,6 +91,7 @@ public class ServiceManager {
     public static void clearServiceContainer() {
         springServiceContainer = null;
         CLASS_CACHE.clear();
+        DYNAMIC_CACHE.clear();
         RETURN_CODES.clear();
     }
 
@@ -86,6 +108,15 @@ public class ServiceManager {
     @PostConstruct
     private void init() {
         springServiceContainer = serviceContainer;
+    }
+
+    /** The typed lookup must cache a target instance, not an unrelated IService adapter. */
+    private static IService createServiceInstance(Class<?> targetClass) {
+        try {
+            return targetClass.asSubclass(IService.class).getDeclaredConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Failed to construct service " + targetClass.getName(), e);
+        }
     }
 
     private static IService createReflectiveService(Class<?> targetClass) {
