@@ -538,7 +538,8 @@ public class Util {
         int allowedScale = Math.max(scale, 0);
         BigDecimal decimal = bigDecimalValue(value).stripTrailingZeros();
         int actualScale = Math.max(decimal.scale(), 0);
-        int integerDigits = decimal.precision() - actualScale;
+        // A negative scale still contributes integer digits (100 -> 1E+2).
+        int integerDigits = decimal.precision() - decimal.scale();
         if (integerDigits < 1) {
             integerDigits = 1;
         }
