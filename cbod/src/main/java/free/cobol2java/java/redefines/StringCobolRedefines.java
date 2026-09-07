@@ -35,6 +35,10 @@ public class StringCobolRedefines extends AbstractCobolRedefines<String> {
     }
 
     public void set(CobolConstant value) {
+        if (value == CobolConstant.LOW_VALUE || value == CobolConstant.LOW_VALUES) {
+            java.util.Arrays.fill(storage.bytes(), start, start + length, (byte) 0);
+            return;
+        }
         writeString(CobolString.value(value));
     }
 
