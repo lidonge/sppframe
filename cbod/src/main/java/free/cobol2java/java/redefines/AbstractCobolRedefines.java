@@ -48,6 +48,11 @@ public abstract class AbstractCobolRedefines<T> implements ICobolRedefines<T> {
         return storage;
     }
 
+    /** Absolute start of this view in the shared REDEFINES storage. */
+    public int storageStart() {
+        return start;
+    }
+
     protected AbstractCobolRedefines(CobolRedefinesBuffer storage, int start, int length, Charset charset) {
         this.storage = Objects.requireNonNull(storage, "storage must not be null");
         this.charset = Objects.requireNonNull(charset, "charset must not be null");
