@@ -65,7 +65,7 @@ public class SppContext implements ISppContext {
 
     @Override
     public boolean isInSerialBlock() {
-        return blocks.peek().getType() == IBlock.BlockType.Serial;
+        return !blocks.isEmpty() && blocks.peek().getType() == IBlock.BlockType.Serial;
     }
 
     @Override
