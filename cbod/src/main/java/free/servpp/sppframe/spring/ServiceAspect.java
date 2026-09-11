@@ -13,6 +13,11 @@ import org.springframework.stereotype.Component;
 @Aspect
 @Component
 public class ServiceAspect implements IServiceAspect {
+    @Around("execution(free.cobol2java.java.SqlCursorStatus free.cobol2java.java.SqlCursorService+.*(..)) || execution(free.cobol2java.java.SqlReadResult free.cobol2java.java.SqlCursorService+.*(..))")
+    public Object aroundSqlCursor(ProceedingJoinPoint joinPoint) throws Throwable {
+        return aroundValueService(joinPoint);
+    }
+
     @Around("execution(free.cobol2java.java.SqlWriteResult free.cobol2java.java.SqlWriteService+.*(..))")
     public Object aroundSqlWrite(ProceedingJoinPoint joinPoint) throws Throwable {
         return aroundValueService(joinPoint);
