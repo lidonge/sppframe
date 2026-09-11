@@ -14,13 +14,24 @@ public final class CobolCharacterAddress {
         private final int extent;
         private final Supplier<String> getter;
         private final Consumer<String> setter;
+        private final boolean utf8;
         private final ConcurrentHashMap<Integer, CobolCharacterAddress> addresses = new ConcurrentHashMap<>();
 
         public Space(int extent, Supplier<String> getter, Consumer<String> setter) {
+            this(extent, getter, setter, false);
+        }
+
+        /** Callbacks carry lossless Codec state, not decoded public field values. */
+        public static Space utf8(int extent, Supplier<String> rawGetter, Consumer<String> rawSetter) {
+            return new Space(extent, rawGetter, rawSetter, true);
+        }
+
+        private Space(int extent, Supplier<String> getter, Consumer<String> setter, boolean utf8) {
             if (extent < 1) throw new IllegalArgumentException("Character address space requires a positive extent");
             this.extent = extent;
             this.getter = Objects.requireNonNull(getter);
             this.setter = Objects.requireNonNull(setter);
+            this.utf8 = utf8;
         }
 
         public CobolCharacterAddress at(int offset) {
@@ -30,7 +41,8 @@ public final class CobolCharacterAddress {
 
         private String current() {
             String value = Objects.requireNonNull(getter.get(), "Character address state");
-            if (value.length() != extent) throw new IllegalStateException("Character address extent changed");
+            int width = utf8 ? CobolUtf8Codec.encodeState(value).length : value.length();
+            if (width != extent) throw new IllegalStateException("Character address extent changed");
             return value;
         }
     }
@@ -47,12 +59,18 @@ public final class CobolCharacterAddress {
 
     public String read(int width) {
         checkWidth(width);
-        return space.current().substring(offset, offset + width);
+        String current = space.current();
+        return space.utf8 ? CobolUtf8Codec.read(current, offset, width)
+                : current.substring(offset, offset + width);
     }
 
     public void write(String value, int width) {
         checkWidth(width);
         String current = space.current();
+        if (space.utf8) {
+            space.setter.accept(CobolUtf8Codec.write(current, value, offset, width));
+            return;
+        }
         space.setter.accept(current.substring(0, offset) + CobolString.fixed(value, width)
                 + current.substring(offset + width));
     }

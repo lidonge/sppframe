@@ -89,6 +89,35 @@ public final class CobolUtf8Codec {
         return decodeState(bytes);
     }
 
+    /** Internal byte slice: unlike read, malformed bytes remain lossless state. */
+    public static String sliceState(String state, int offset, int width) {
+        Objects.requireNonNull(state, "state");
+        if (ascii(state)) {
+            Objects.checkFromIndexSize(offset, width, state.length());
+            return state.substring(offset, offset + width);
+        }
+        byte[] bytes = encodeState(state);
+        Objects.checkFromIndexSize(offset, width, bytes.length);
+        return decodeState(Arrays.copyOfRange(bytes, offset, offset + width));
+    }
+
+    /** Internal exact-width copy; caller must perform public value padding separately. */
+    public static String writeState(String state, String replacement, int offset, int width) {
+        Objects.requireNonNull(state, "state");
+        Objects.requireNonNull(replacement, "replacement");
+        if (ascii(state) && ascii(replacement)) {
+            Objects.checkFromIndexSize(offset, width, state.length());
+            if (replacement.length() != width) throw new IllegalArgumentException("State width mismatch");
+            return state.substring(0, offset) + replacement + state.substring(offset + width);
+        }
+        byte[] bytes = encodeState(state);
+        Objects.checkFromIndexSize(offset, width, bytes.length);
+        byte[] source = encodeState(replacement);
+        if (source.length != width) throw new IllegalArgumentException("State width mismatch");
+        System.arraycopy(source, 0, bytes, offset, width);
+        return decodeState(bytes);
+    }
+
     private static boolean ascii(String value) {
         for (int index = 0; index < value.length(); index++) {
             if (value.charAt(index) > 127) return false;
