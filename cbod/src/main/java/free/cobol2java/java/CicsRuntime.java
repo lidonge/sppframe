@@ -50,6 +50,19 @@ public final class CicsRuntime {
 
     public static Response<Void> link(String program, Object commarea, Integer length) {
         IService service = ServiceManager.getService(program);
+        return invokeLink(program, service, commarea, length);
+    }
+
+    public static Response<Void> link(String program, Class<? extends IService> serviceType,
+                                      Object commarea, Integer length) {
+        if (serviceType == null) {
+            throw new IllegalArgumentException("Resolved CICS LINK service type must not be null.");
+        }
+        IService service = ServiceManager.getService(serviceType);
+        return invokeLink(program, service, commarea, length);
+    }
+
+    private static Response<Void> invokeLink(String program, IService service, Object commarea, Integer length) {
         if (service == null) {
             return status(null, 0, 0);
         }
