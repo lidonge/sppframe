@@ -6,6 +6,42 @@ package free.cobol2java.java;
  */
 public interface IService {
 
+    /** Invokes the generated business entry point and preserves invocation failures. */
+    default Object invoke(Object... parameters) {
+        Object[] actualParameters = parameters == null ? new Object[0] : parameters;
+        java.lang.reflect.Method method = null;
+        for (java.lang.reflect.Method candidate : procedureMethods(this.getClass())) {
+            if (!candidate.getName().equals("procedure") || candidate.isVarArgs()
+                    || candidate.getParameterCount() != actualParameters.length) {
+                continue;
+            }
+            Class<?>[] parameterTypes = candidate.getParameterTypes();
+            boolean compatible = true;
+            for (int i = 0; i < parameterTypes.length; i++) {
+                if (actualParameters[i] != null && !parameterTypes[i].isInstance(actualParameters[i])) {
+                    compatible = false;
+                    break;
+                }
+            }
+            if (compatible) {
+                method = candidate;
+                break;
+            }
+        }
+        if (method == null) {
+            throw new ServiceInvocationException("No compatible procedure method on " + getClass().getName());
+        }
+        try {
+            method.setAccessible(true);
+            return method.invoke(this, actualParameters);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            throw new ServiceInvocationException("Service invocation failed: " + getClass().getName(), cause);
+        } catch (ReflectiveOperationException | SecurityException e) {
+            throw new ServiceInvocationException("Service invocation failed: " + getClass().getName(), e);
+        }
+    }
+
     /**
      * Executes a method named {@code procedure} with dynamically provided parameters.
      * Reflection is used to find the overload with the same parameter count.

@@ -46,6 +46,8 @@ public class ServiceManager {
     public static IService getService(String name) {
         if (name == null || name.isBlank()) {
             name = "defaultService";
+        } else {
+            name = name.trim();
         }
         if (springServiceContainer != null) {
             Object service = springServiceContainer.getService(name);
