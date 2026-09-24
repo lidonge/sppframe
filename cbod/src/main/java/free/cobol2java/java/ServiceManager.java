@@ -25,6 +25,7 @@ public class ServiceManager {
     private static final Map<Class<?>, IService> CLASS_CACHE = new ConcurrentHashMap<>();
     private static final Map<Class<?>, IService> DYNAMIC_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, Integer> RETURN_CODES = new ConcurrentHashMap<>();
+    private static final Map<String, String> REPOSITORY_BEAN_NAMES = new ConcurrentHashMap<>();
     private static IServiceContainer springServiceContainer;
 
     @Autowired
@@ -41,6 +42,57 @@ public class ServiceManager {
             return null;
         }
         return serviceClass.cast(CLASS_CACHE.computeIfAbsent(serviceClass, ServiceManager::createServiceInstance));
+    }
+
+    /** Resolve a container-managed bean by type, including non-IService dependencies. */
+    public static <T> T beanByType(Class<T> beanType) {
+        if (beanType == null || springServiceContainer == null) {
+            return null;
+        }
+        T bean = springServiceContainer.getService(beanType);
+        return beanType.isInstance(bean) ? bean : null;
+    }
+
+    /** Resolve a repository mapped to the exact runtime CICS FILE name. */
+    @SuppressWarnings("unchecked")
+    public static <K, R> free.cobol2java.cics.CicsCrudRepository<K, R> repositoryByName(String fileName) {
+        if (fileName == null || springServiceContainer == null) return null;
+        String beanName = REPOSITORY_BEAN_NAMES.get(fileName);
+        if (beanName == null) return null;
+        Object repository = springServiceContainer.getBean(beanName);
+        if (repository == null) return null;
+        if (!(repository instanceof free.cobol2java.cics.CicsCrudRepository<?, ?>)) {
+            throw new IllegalStateException("Configured CICS FILE mapping '" + fileName
+                    + "' is not a CicsCrudRepository: " + repository.getClass().getName());
+        }
+        return (free.cobol2java.cics.CicsCrudRepository<K, R>) repository;
+    }
+
+    /** Resolve a repository by a statically known generated type. */
+    @SuppressWarnings("unchecked")
+    public static free.cobol2java.cics.CicsCrudRepository<Object, Object> repositoryByType(Class<?> repositoryType) {
+        Object repository = beanByType(repositoryType);
+        if (repository == null) return null;
+        if (!(repository instanceof free.cobol2java.cics.CicsCrudRepository<?, ?>)) {
+            throw new IllegalStateException("Configured repository type is not a CicsCrudRepository: "
+                    + repositoryType.getName());
+        }
+        return (free.cobol2java.cics.CicsCrudRepository<Object, Object>) repository;
+    }
+
+    /** Register an exact CICS FILE to container-bean mapping; no name derivation is performed. */
+    public static void registerRepositoryMapping(String fileName, String beanName) {
+        if (fileName == null || fileName.isEmpty() || beanName == null || beanName.isEmpty()) {
+            throw new IllegalArgumentException("CICS FILE and repository bean names must be non-empty");
+        }
+        String previous = REPOSITORY_BEAN_NAMES.putIfAbsent(fileName, beanName);
+        if (previous != null && !previous.equals(beanName)) {
+            throw new IllegalStateException("CICS FILE '" + fileName + "' is already mapped to bean '" + previous + "'");
+        }
+    }
+
+    public static void clearRepositoryMappings() {
+        REPOSITORY_BEAN_NAMES.clear();
     }
 
     public static IService getService(String name) {
@@ -95,6 +147,7 @@ public class ServiceManager {
         CLASS_CACHE.clear();
         DYNAMIC_CACHE.clear();
         RETURN_CODES.clear();
+        REPOSITORY_BEAN_NAMES.clear();
     }
 
     public static Integer getReturnCode(Object owner) {

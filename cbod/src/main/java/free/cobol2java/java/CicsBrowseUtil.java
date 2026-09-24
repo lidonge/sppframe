@@ -10,13 +10,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Minimal browse runtime for generated STARTBR/READNEXT/READPREV/ENDBR code.
  */
 public final class CicsBrowseUtil {
-    private static final Map<String, BrowseState> BROWSE_STATES = new ConcurrentHashMap<>();
+    private static final CicsBrowseContext LEGACY_CONTEXT = new CicsBrowseContext();
 
     private CicsBrowseUtil() {
     }
@@ -27,27 +26,38 @@ public final class CicsBrowseUtil {
 
     public static CicsRuntime.Response<Void> startBrowse(CicsCrudRepository<Object, Object> repository, Object ridfld,
                                                          boolean gteq, boolean equal, boolean generic, Integer keyLength) {
+        return startBrowse(LEGACY_CONTEXT, legacyResource(repository), repository, ridfld,
+                gteq, equal, generic, keyLength);
+    }
+
+    static CicsRuntime.Response<Void> startBrowse(CicsBrowseContext context, String resource,
+            CicsCrudRepository<Object, Object> repository, Object ridfld,
+            boolean gteq, boolean equal, boolean generic, Integer keyLength) {
         if (repository == null) {
             return CicsRuntime.status(null, 16, 1);
         }
         List<Object> keys = browseKeys(repository, ridfld, gteq, equal, generic, keyLength);
         Object normalizedKey = normalizeKey(ridfld);
         int position = resolveStartPosition(keys, normalizedKey, gteq, equal, generic, keyLength);
-        String browseKey = browseKey(repository);
         if (position < 0) {
-            BROWSE_STATES.remove(browseKey);
+            context.state(resource, null);
             return CicsRuntime.status(null, 13, 1);
         }
-        BROWSE_STATES.put(browseKey, new BrowseState(keys, position));
+        context.state(resource, new BrowseState(keys, position));
         return CicsRuntime.status(null, 0, 0);
     }
 
     public static <T> CicsRuntime.Response<Object> readNext(CicsCrudRepository<Object, Object> repository, T into,
                                                             Object ridfld, Integer length) {
+        return readNext(LEGACY_CONTEXT, legacyResource(repository), repository, into, ridfld, length);
+    }
+
+    static <T> CicsRuntime.Response<Object> readNext(CicsBrowseContext context, String resource,
+            CicsCrudRepository<Object, Object> repository, T into, Object ridfld, Integer length) {
         if (repository == null) {
             return CicsRuntime.status(null, 16, 1);
         }
-        BrowseState state = BROWSE_STATES.get(browseKey(repository));
+        BrowseState state = context.state(resource);
         if (state == null) {
             return CicsRuntime.status(null, 16, 2);
         }
@@ -64,10 +74,15 @@ public final class CicsBrowseUtil {
 
     public static <T> CicsRuntime.Response<Object> readPrev(CicsCrudRepository<Object, Object> repository, T into,
                                                             Object ridfld, Integer length) {
+        return readPrev(LEGACY_CONTEXT, legacyResource(repository), repository, into, ridfld, length);
+    }
+
+    static <T> CicsRuntime.Response<Object> readPrev(CicsBrowseContext context, String resource,
+            CicsCrudRepository<Object, Object> repository, T into, Object ridfld, Integer length) {
         if (repository == null) {
             return CicsRuntime.status(null, 16, 1);
         }
-        BrowseState state = BROWSE_STATES.get(browseKey(repository));
+        BrowseState state = context.state(resource);
         if (state == null) {
             return CicsRuntime.status(null, 16, 2);
         }
@@ -84,13 +99,18 @@ public final class CicsBrowseUtil {
     }
 
     public static Object currentKey(CicsCrudRepository<Object, Object> repository) {
-        BrowseState state = repository == null ? null : BROWSE_STATES.get(browseKey(repository));
+        BrowseState state = repository == null ? null : LEGACY_CONTEXT.state(legacyResource(repository));
         return state == null ? null : state.currentKey;
     }
 
     public static CicsRuntime.Response<Void> endBrowse(CicsCrudRepository<Object, Object> repository) {
+        return endBrowse(LEGACY_CONTEXT, legacyResource(repository), repository);
+    }
+
+    static CicsRuntime.Response<Void> endBrowse(CicsBrowseContext context, String resource,
+            CicsCrudRepository<Object, Object> repository) {
         if (repository != null) {
-            BROWSE_STATES.remove(browseKey(repository));
+            context.state(resource, null);
         }
         return CicsRuntime.status(null, 0, 0);
     }
@@ -162,7 +182,8 @@ public final class CicsBrowseUtil {
         }
     }
 
-    private static String browseKey(CicsCrudRepository<Object, Object> repository) {
+    private static String legacyResource(CicsCrudRepository<Object, Object> repository) {
+        if (repository == null) return "";
         return repository.getClass().getName();
     }
 
@@ -235,7 +256,7 @@ public final class CicsBrowseUtil {
 
     private static final Comparator<Object> KEY_COMPARATOR = CicsBrowseUtil::compareKeys;
 
-    private static final class BrowseState {
+    static final class BrowseState {
         private final List<Object> keys;
         private int nextIndex;
         private Object currentKey;

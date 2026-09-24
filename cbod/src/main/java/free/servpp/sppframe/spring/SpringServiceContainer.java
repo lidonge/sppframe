@@ -29,6 +29,11 @@ public class SpringServiceContainer implements IServiceContainer {
     }
 
     @Override
+    public Object getBean(String beanName) {
+        return applicationContext.getBean(beanName);
+    }
+
+    @Override
     public String getServiceName(Class<?> clazz) {
         return clazz.getSimpleName();
     }
