@@ -13,6 +13,9 @@ import org.springframework.core.annotation.AliasFor;
 @Documented
 @org.springframework.transaction.annotation.Transactional
 public @interface Transactional {
+    /** Result-directed source completion, interpreted by the runtime region aspect. */
+    boolean resultDriven() default false;
+
     @AliasFor(annotation = org.springframework.transaction.annotation.Transactional.class, attribute = "value")
     String value() default "";
 

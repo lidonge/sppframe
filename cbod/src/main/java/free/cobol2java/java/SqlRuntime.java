@@ -268,6 +268,33 @@ public final class SqlRuntime {
                 .collect(Collectors.toList());
     }
 
+    /** DB2 SUBSTR(column, start) comparison with SUBSTR(host, start), as a cursor predicate. */
+    public static <T> List<T> filterRowsBySubstringComparison(List<T> rows, String propertyName,
+            Object columnStart, Object hostValue, Object hostStart, String operator) {
+        if (rows == null || rows.isEmpty()) return Collections.emptyList();
+        if (propertyName == null || propertyName.isBlank())
+            throw new IllegalArgumentException("SQL SUBSTR cursor column is absent");
+        if (!">".equals(operator) && !">=".equals(operator)
+                && !"<".equals(operator) && !"<=".equals(operator))
+            throw new IllegalArgumentException("Unsupported SQL SUBSTR comparison: " + operator);
+        String bound = sqlSubstring(hostValue, hostStart);
+        if (bound == null) return Collections.emptyList();
+        return rows.stream().filter(row -> {
+            String actual = sqlSubstring(readProperty(row, propertyName), columnStart);
+            return actual != null && compareByOperator(actual, bound, operator);
+        }).collect(Collectors.toList());
+    }
+
+    private static String sqlSubstring(Object value, Object start) {
+        if (value == null || start == null) return null;
+        if (!(value instanceof String text) || !(start instanceof Number number))
+            throw new IllegalArgumentException("SQL SUBSTR requires a character value and numeric start");
+        int position = number.intValue();
+        if (position < 1 || position > text.length())
+            throw new IllegalArgumentException("SQL SUBSTR start is outside the source string");
+        return text.substring(position - 1);
+    }
+
     public static <T> List<T> sortRows(List<T> rows, String propertyName, boolean descending) {
         if (rows == null || rows.size() <= 1 || propertyName == null || propertyName.isBlank()) {
             return rows == null ? Collections.emptyList() : rows;

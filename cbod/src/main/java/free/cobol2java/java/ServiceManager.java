@@ -150,6 +150,11 @@ public class ServiceManager {
         REPOSITORY_BEAN_NAMES.clear();
     }
 
+    /** Release a source work unit left open at a generated program boundary. */
+    public static void abortIncompleteTransactionRegion(Object state) {
+        free.servpp.sppframe.spring.TransactionRegionAspect.abortIncomplete(state);
+    }
+
     public static Integer getReturnCode(Object owner) {
         return RETURN_CODES.getOrDefault(returnCodeKey(owner), 0);
     }
