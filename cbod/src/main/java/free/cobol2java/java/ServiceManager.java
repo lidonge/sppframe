@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.stereotype.Component;
 
 import free.servpp.sppframe.common.IServiceContainer;
@@ -42,6 +43,19 @@ public class ServiceManager {
             return null;
         }
         return serviceClass.cast(CLASS_CACHE.computeIfAbsent(serviceClass, ServiceManager::createServiceInstance));
+    }
+
+    /** A transaction region must cross an interceptable class proxy, never the local fallback. */
+    public static <T> T transactionalProxy(Class<T> serviceClass) {
+        if (serviceClass == null || springServiceContainer == null) {
+            throw new IllegalStateException("Transactional service has no Spring container: " + serviceClass);
+        }
+        T service = springServiceContainer.getService(serviceClass);
+        if (service == null || !serviceClass.isInstance(service) || !AopUtils.isCglibProxy(service)) {
+            throw new IllegalStateException("Transactional service has no Spring class proxy: "
+                    + serviceClass.getName());
+        }
+        return service;
     }
 
     /** Resolve a container-managed bean by type, including non-IService dependencies. */
