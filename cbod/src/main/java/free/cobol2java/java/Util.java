@@ -886,6 +886,9 @@ public class Util {
             if (fieldInfo.precision() > 0) {
                 return fieldInfo.precision();
             }
+            if (fieldInfo.cobolType().isBlank() && fieldInfo.byteLength() > 0) {
+                return fieldInfo.byteLength();
+            }
         }
         return 0;
     }
