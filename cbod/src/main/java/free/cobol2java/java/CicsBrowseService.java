@@ -1,11 +1,37 @@
 package free.cobol2java.java;
 
 import free.cobol2java.cics.CicsCrudRepository;
+import free.cobol2java.cics.RecordNotFoundException;
 import org.springframework.stereotype.Component;
 
 /** Replaceable typed service boundary for CICS file browse commands. */
 @Component
 public class CicsBrowseService implements DataAccessService {
+    @Override
+    public Object read(AccessContext context, DataAccessResource resource, Object key,
+            AccessStatusSink status) {
+        var repository = repository(browseResource(resource));
+        if (repository == null) {
+            status.publish(16, 9);
+            return null;
+        }
+        try {
+            var result = repository.read(key);
+            if (result == null || result.isEmpty()) {
+                status.publish(13, 1);
+                return null;
+            }
+            status.publish(0, 0);
+            return result.get();
+        } catch (RecordNotFoundException missing) {
+            status.publish(13, 1);
+            return null;
+        } catch (free.cobol2java.cics.CicsDataAccessException failure) {
+            status.publish(16, 9);
+            return null;
+        }
+    }
+
     @Override
     public <K> void begin(AccessContext context, DataAccessResource resource, K key, boolean gteq,
             boolean equal, boolean generic, Integer keyLength, AccessStatusSink status) {

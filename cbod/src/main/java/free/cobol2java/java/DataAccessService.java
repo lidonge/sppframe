@@ -2,6 +2,10 @@ package free.cobol2java.java;
 
 /** Technology-neutral record cursor contract; a runtime adapter supplies its implementation. */
 public interface DataAccessService extends IService {
+    /** Read one record; the adapter publishes source-visible outcome through status. */
+    Object read(AccessContext context, DataAccessResource resource, Object key,
+            AccessStatusSink status);
+
     <K> void begin(AccessContext context, DataAccessResource resource, K key, boolean gteq,
             boolean equal, boolean generic, Integer keyLength, AccessStatusSink status);
 
