@@ -16,4 +16,14 @@ public class CicsProgramControlAdapter implements ProgramControlService {
     public boolean dispatchControlFlow(AccessStatusSink status) {
         return CicsRuntime.dispatchHandle(status.status());
     }
+
+    @Override
+    public void pushHandle() {
+        CicsRuntime.pushHandle();
+    }
+
+    @Override
+    public void popHandle() {
+        CicsRuntime.popHandle();
+    }
 }

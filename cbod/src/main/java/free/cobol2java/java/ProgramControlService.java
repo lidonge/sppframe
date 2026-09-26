@@ -5,4 +5,8 @@ public interface ProgramControlService extends IService {
     void returnToCaller(boolean saveCommonWorkAreas, AccessStatusSink status);
 
     boolean dispatchControlFlow(AccessStatusSink status);
+
+    void pushHandle();
+
+    void popHandle();
 }
