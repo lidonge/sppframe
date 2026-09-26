@@ -119,8 +119,14 @@ public class CicsBrowseService implements DataAccessService {
 
     @SuppressWarnings("unchecked")
     private CicsCrudRepository<Object, Object> repository(CicsBrowseResource resource) {
-        return resource.repositoryType() == null
-                ? ServiceManager.repositoryByName(resource.name().toString())
-                : ServiceManager.repositoryByType(resource.repositoryType());
+        Object bean = resource.repositoryType() == null
+                ? ServiceManager.getBean(ServiceManager.repositoryBeanName(resource.name().toString()))
+                : ServiceManager.getBean(resource.repositoryType());
+        if (bean == null) return null;
+        if (!(bean instanceof CicsCrudRepository<?, ?>)) {
+            throw new IllegalStateException("Configured CICS FILE repository bean has incompatible type: "
+                    + bean.getClass().getName());
+        }
+        return (CicsCrudRepository<Object, Object>) bean;
     }
 }
