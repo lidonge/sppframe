@@ -6,6 +6,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class CicsTransientStorageAdapter implements QueueAccessService {
     @Override
+    public void writeTd(Object queue, Object value, Object length, AccessStatusSink status) {
+        var response = CicsRuntime.writeqTd(queue, value, length);
+        status.publish(response.resp(), response.resp2());
+    }
+
+    @Override
     public Object readTs(Object queue, Object item, Object length, AccessStatusSink status) {
         var response = CicsRuntime.readqTs(queue, item, length);
         status.publish(response.resp(), response.resp2());

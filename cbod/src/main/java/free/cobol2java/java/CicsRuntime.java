@@ -130,8 +130,8 @@ public final class CicsRuntime {
         LOCAL_RESOURCE_LOCKS.clear();
     }
 
-    public static Response<Void> writeqTd(Object queue, Object value) {
-        cicsQueueService.writeTd(queueName(queue), value);
+    public static Response<Void> writeqTd(Object queue, Object value, Object length) {
+        cicsQueueService.writeTd(queueName(queue), value, itemNumber(length));
         return status(null, 0, 0);
     }
 
@@ -567,7 +567,7 @@ public final class CicsRuntime {
     }
 
     public interface CicsQueueService {
-        void writeTd(String queue, Object value);
+        void writeTd(String queue, Object value, Integer length);
 
         Object readTd(String queue);
 
@@ -600,7 +600,7 @@ public final class CicsRuntime {
 
     private static final class LocalCicsQueueService implements CicsQueueService {
         @Override
-        public void writeTd(String queue, Object value) {
+        public void writeTd(String queue, Object value, Integer length) {
             LOCAL_TD_QUEUES.computeIfAbsent(queue, ignored -> new ConcurrentLinkedQueue<>()).add(value);
         }
 

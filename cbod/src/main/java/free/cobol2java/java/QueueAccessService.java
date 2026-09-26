@@ -2,6 +2,8 @@ package free.cobol2java.java;
 
 /** Queue operation contract used by generated programs; a runtime adapter supplies the storage mechanism. */
 public interface QueueAccessService extends IService {
+    void writeTd(Object queue, Object value, Object length, AccessStatusSink status);
+
     Object readTs(Object queue, Object item, Object length, AccessStatusSink status);
 
     void writeTs(Object queue, Object value, Object length, Object item, AccessStatusSink status);
