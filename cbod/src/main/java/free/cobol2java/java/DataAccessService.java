@@ -6,6 +6,10 @@ public interface DataAccessService extends IService {
     Object read(AccessContext context, DataAccessResource resource, Object key,
             AccessStatusSink status);
 
+    /** Rewrite the current source record without exposing Repository lookup or response types. */
+    void rewrite(AccessContext context, DataAccessResource resource, Object record,
+            AccessStatusSink status);
+
     <K> void begin(AccessContext context, DataAccessResource resource, K key, boolean gteq,
             boolean equal, boolean generic, Integer keyLength, AccessStatusSink status);
 

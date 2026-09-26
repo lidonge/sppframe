@@ -33,6 +33,24 @@ public class CicsBrowseService implements DataAccessService {
     }
 
     @Override
+    public void rewrite(AccessContext context, DataAccessResource resource, Object record,
+            AccessStatusSink status) {
+        var repository = repository(browseResource(resource));
+        if (repository == null) {
+            status.publish(16, 9);
+            return;
+        }
+        try {
+            repository.rewrite(null, record);
+            status.publish(0, 0);
+        } catch (RecordNotFoundException missing) {
+            status.publish(13, 1);
+        } catch (free.cobol2java.cics.CicsDataAccessException failure) {
+            status.publish(16, 9);
+        }
+    }
+
+    @Override
     public <K> void begin(AccessContext context, DataAccessResource resource, K key, boolean gteq,
             boolean equal, boolean generic, Integer keyLength, AccessStatusSink status) {
         var response = start(browseContext(context), browseResource(resource), key,
