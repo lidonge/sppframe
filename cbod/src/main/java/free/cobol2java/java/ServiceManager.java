@@ -60,6 +60,11 @@ public class ServiceManager {
 
     /** Resolve a container-managed bean by type, including non-IService dependencies. */
     public static <T> T beanByType(Class<T> beanType) {
+        return getBean(beanType);
+    }
+
+    /** Resolve a container-managed bean by type, including non-IService dependencies. */
+    public static <T> T getBean(Class<T> beanType) {
         if (beanType == null || springServiceContainer == null) {
             return null;
         }
@@ -67,13 +72,27 @@ public class ServiceManager {
         return beanType.isInstance(bean) ? bean : null;
     }
 
+    /** Resolve a container-managed bean by its exact bean name. */
+    public static Object getBean(String beanName) {
+        if (beanName == null || beanName.isEmpty() || springServiceContainer == null) {
+            return null;
+        }
+        return springServiceContainer.getBean(beanName);
+    }
+
+    /** Return the explicitly registered bean name for an exact runtime CICS FILE value. */
+    public static String repositoryBeanName(String fileName) {
+        if (fileName == null) return null;
+        return REPOSITORY_BEAN_NAMES.get(fileName);
+    }
+
     /** Resolve a repository mapped to the exact runtime CICS FILE name. */
     @SuppressWarnings("unchecked")
     public static <K, R> free.cobol2java.cics.CicsCrudRepository<K, R> repositoryByName(String fileName) {
         if (fileName == null || springServiceContainer == null) return null;
-        String beanName = REPOSITORY_BEAN_NAMES.get(fileName);
+        String beanName = repositoryBeanName(fileName);
         if (beanName == null) return null;
-        Object repository = springServiceContainer.getBean(beanName);
+        Object repository = getBean(beanName);
         if (repository == null) return null;
         if (!(repository instanceof free.cobol2java.cics.CicsCrudRepository<?, ?>)) {
             throw new IllegalStateException("Configured CICS FILE mapping '" + fileName
@@ -85,7 +104,7 @@ public class ServiceManager {
     /** Resolve a repository by a statically known generated type. */
     @SuppressWarnings("unchecked")
     public static free.cobol2java.cics.CicsCrudRepository<Object, Object> repositoryByType(Class<?> repositoryType) {
-        Object repository = beanByType(repositoryType);
+        Object repository = getBean(repositoryType);
         if (repository == null) return null;
         if (!(repository instanceof free.cobol2java.cics.CicsCrudRepository<?, ?>)) {
             throw new IllegalStateException("Configured repository type is not a CicsCrudRepository: "

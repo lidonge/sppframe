@@ -5,7 +5,6 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Objects;
 import java.util.Optional;
@@ -23,7 +22,7 @@ public final class SqlRuntime {
         if (mapperType == null) {
             return null;
         }
-        T bean = beanByType(mapperType);
+        T bean = ServiceManager.getBean(mapperType);
         if (bean != null) {
             return bean;
         }
@@ -32,67 +31,7 @@ public final class SqlRuntime {
 
     @SuppressWarnings("unchecked")
     public static <T> T beanByType(Class<T> beanType) {
-        if (beanType == null) {
-            return null;
-        }
-        Object fromServiceContainer = invokeServiceContainer(beanType);
-        if (beanType.isInstance(fromServiceContainer)) {
-            return (T) fromServiceContainer;
-        }
-        Object fromContextLoader = invokeSpringContext(beanType);
-        if (beanType.isInstance(fromContextLoader)) {
-            return (T) fromContextLoader;
-        }
-        Object constructed = constructWithBeanConstructor(beanType);
-        if (beanType.isInstance(constructed)) {
-            return (T) constructed;
-        }
-        return null;
-    }
-
-    private static Object constructWithBeanConstructor(Class<?> beanType) {
-        try {
-            for (Constructor<?> constructor : beanType.getConstructors()) {
-                Class<?>[] parameterTypes = constructor.getParameterTypes();
-                if (parameterTypes.length == 1) {
-                    Object dependency = beanByType(parameterTypes[0]);
-                    if (dependency != null) {
-                        return constructor.newInstance(dependency);
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
-    private static Object invokeServiceContainer(Class<?> beanType) {
-        try {
-            Method getContainer = ServiceManager.class.getMethod("getServiceContainer");
-            Object container = getContainer.invoke(null);
-            if (container == null) {
-                return null;
-            }
-            Method byType = container.getClass().getMethod("getService", Class.class);
-            return byType.invoke(container, beanType);
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static Object invokeSpringContext(Class<?> beanType) {
-        try {
-            Class<?> contextLoaderClass = Class.forName("org.springframework.web.context.ContextLoader");
-            Method currentContext = contextLoaderClass.getMethod("getCurrentWebApplicationContext");
-            Object applicationContext = currentContext.invoke(null);
-            if (applicationContext == null) {
-                return null;
-            }
-            Method getBean = applicationContext.getClass().getMethod("getBean", Class.class);
-            return getBean.invoke(applicationContext, beanType);
-        } catch (Exception ignored) {
-            return null;
-        }
+        return ServiceManager.getBean(beanType);
     }
 
     public static void openCursor(String cursorName, List<?> rows) {
@@ -352,7 +291,7 @@ public final class SqlRuntime {
     private static Object sqlArtifactRepository(String repositoryClassName) {
         try {
             Class<?> repositoryType = Class.forName(repositoryClassName);
-            Object repository = beanByType(repositoryType);
+            Object repository = ServiceManager.getBean(repositoryType);
             if (repository == null) {
                 throw new IllegalStateException("Unable to resolve MyBatis repository bean: " + repositoryClassName);
             }
