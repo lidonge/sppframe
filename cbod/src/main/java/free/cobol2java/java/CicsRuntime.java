@@ -2,9 +2,12 @@ package free.cobol2java.java;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -23,6 +26,7 @@ public final class CicsRuntime {
     public static final int NOTFND = 13;
     public static final int INVREQ = 16;
     public static final int ENDFILE = 20;
+    private static final int LENGERR = 22;
 
     private static final List<StartRequest> START_REQUESTS = new ArrayList<>();
     private static final List<ReturnRequest> RETURN_REQUESTS = new ArrayList<>();
@@ -112,8 +116,34 @@ public final class CicsRuntime {
         return status(null, 0, 0);
     }
 
+    /** ENQ by a source-provided resource-name byte length. */
+    public static Response<Void> enq(Object resource, Object length) {
+        if (length == null) {
+            return enq(resource);
+        }
+        String key = resourceNameKey(resource, length);
+        if (key == null) {
+            return status(null, LENGERR, 1);
+        }
+        distributedLock.lock(key);
+        return status(null, 0, 0);
+    }
+
     public static Response<Void> deq(Object resource) {
         distributedLock.unlock(resourceKey(resource));
+        return status(null, 0, 0);
+    }
+
+    /** DEQ by a source-provided resource-name byte length. */
+    public static Response<Void> deq(Object resource, Object length) {
+        if (length == null) {
+            return deq(resource);
+        }
+        String key = resourceNameKey(resource, length);
+        if (key == null) {
+            return status(null, LENGERR, 1);
+        }
+        distributedLock.unlock(key);
         return status(null, 0, 0);
     }
 
@@ -421,6 +451,18 @@ public final class CicsRuntime {
 
     private static String resourceKey(Object resource) {
         return resource == null ? "" : String.valueOf(resource).trim();
+    }
+
+    private static String resourceNameKey(Object resource, Object length) {
+        Integer byteLength = itemNumber(length);
+        if (resource == null || byteLength == null || byteLength < 1 || byteLength > 255) {
+            return null;
+        }
+        byte[] source = CobolString.value(resource).getBytes(StandardCharsets.UTF_8);
+        byte[] name = new byte[byteLength];
+        Arrays.fill(name, (byte) ' ');
+        System.arraycopy(source, 0, name, 0, Math.min(source.length, byteLength));
+        return "NAME:" + HexFormat.of().formatHex(name);
     }
 
     private static String queueName(Object queue) {
