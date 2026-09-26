@@ -143,13 +143,13 @@ public final class CicsRuntime {
         return status(value, 0, 0);
     }
 
-    public static Response<Void> writeqTs(Object queue, Object value, Object item) {
-        cicsQueueService.writeTs(queueName(queue), value, itemNumber(item));
+    public static Response<Void> writeqTs(Object queue, Object value, Object length, Object item) {
+        cicsQueueService.writeTs(queueName(queue), value, itemNumber(length), itemNumber(item));
         return status(null, 0, 0);
     }
 
-    public static Response<Object> readqTs(Object queue, Object item) {
-        Object value = cicsQueueService.readTs(queueName(queue), itemNumber(item));
+    public static Response<Object> readqTs(Object queue, Object item, Object length) {
+        Object value = cicsQueueService.readTs(queueName(queue), itemNumber(item), itemNumber(length));
         if (value == null) {
             return status(null, 13, 0);
         }
@@ -424,7 +424,7 @@ public final class CicsRuntime {
     }
 
     private static String queueName(Object queue) {
-        return queue == null ? "" : String.valueOf(queue).trim();
+        return queue == null ? "" : CobolString.value(queue).trim();
     }
 
     private static Integer itemNumber(Object item) {
@@ -571,9 +571,9 @@ public final class CicsRuntime {
 
         Object readTd(String queue);
 
-        void writeTs(String queue, Object value, Integer item);
+        void writeTs(String queue, Object value, Integer length, Integer item);
 
-        Object readTs(String queue, Integer item);
+        Object readTs(String queue, Integer item, Integer length);
 
         void deleteTs(String queue);
     }
@@ -611,7 +611,7 @@ public final class CicsRuntime {
         }
 
         @Override
-        public void writeTs(String queue, Object value, Integer item) {
+        public void writeTs(String queue, Object value, Integer length, Integer item) {
             List<Object> values = LOCAL_TS_QUEUES.computeIfAbsent(queue, ignored -> new ArrayList<>());
             if (item == null || item <= 0 || item > values.size()) {
                 values.add(value);
@@ -621,7 +621,7 @@ public final class CicsRuntime {
         }
 
         @Override
-        public Object readTs(String queue, Integer item) {
+        public Object readTs(String queue, Integer item, Integer length) {
             List<Object> values = LOCAL_TS_QUEUES.get(queue);
             if (values == null || values.isEmpty()) {
                 return null;
