@@ -19,14 +19,14 @@ public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
     }
 
     public static SqlExecution fromFailure(RuntimeException failure) {
-        int sourceCode = failure instanceof SqlRuntimeException sqlFailure
-                ? sqlFailure.getSqlCode() : -1;
         SQLException sqlFailure = sqlException(failure);
-        return new SqlExecution(SqlStatus.ERROR, sourceCode,
+        Integer mappedCode = failure instanceof SqlRuntimeException sourceFailure
+                ? sourceFailure.getSqlCode() : SqlDriverErrorCompatibility.sourceCode(sqlFailure);
+        return new SqlExecution(SqlStatus.ERROR, mappedCode == null ? -1 : mappedCode,
                 sqlFailure == null ? null : sqlFailure.getSQLState(),
                 sqlFailure == null ? null : sqlFailure.getErrorCode(),
                 sqlFailure == null ? failure.getMessage() : sqlFailure.getMessage(),
-                failure instanceof SqlRuntimeException);
+                mappedCode != null);
     }
 
     @Override
@@ -45,6 +45,11 @@ public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
         throw new UnsupportedOperationException(
                 "No proven source SQLCODE display mapping for SQLSTATE=" + sqlState
                         + ", vendorCode=" + vendorCode);
+    }
+
+    /** Source-compatible text for a proven numeric-edited receiving picture. */
+    public String sourceCompatibleDisplayValue(String picture) {
+        return SqlCodeDisplayCompatibility.fixedLeadingMinus(this, picture);
     }
 
     private static SQLException sqlException(Throwable failure) {
