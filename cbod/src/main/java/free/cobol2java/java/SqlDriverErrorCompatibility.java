@@ -13,6 +13,10 @@ final class SqlDriverErrorCompatibility {
         if (failure.getErrorCode() == 1326 && "24000".equals(failure.getSQLState())) {
             return SqlRuntimeException.CURSOR_NOT_OPEN;
         }
+        // MySQL ER_DUP_ENTRY and Db2 -803 both report a duplicate unique key.
+        if (failure.getErrorCode() == 1062 && "23000".equals(failure.getSQLState())) {
+            return -803;
+        }
         return null;
     }
 }

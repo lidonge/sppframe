@@ -52,6 +52,11 @@ public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
         return SqlCodeDisplayCompatibility.fixedLeadingMinus(this, picture);
     }
 
+    /** Database-independent duplicate-key result for the current operation. */
+    public boolean isDuplicateKey() {
+        return sourceCodeKnown && sourceCode == -803;
+    }
+
     private static SQLException sqlException(Throwable failure) {
         for (Throwable current = failure; current != null; current = current.getCause()) {
             if (current instanceof SQLException sqlFailure) return sqlFailure;
