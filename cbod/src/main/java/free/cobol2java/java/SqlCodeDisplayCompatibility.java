@@ -1,7 +1,7 @@
 package free.cobol2java.java;
 
 /** Source-visible SQLCODE display, kept at the runtime boundary. */
-final class SqlCodeDisplayCompatibility {
+public final class SqlCodeDisplayCompatibility {
     private SqlCodeDisplayCompatibility() {}
 
     /** Formats a fixed leading sign followed by decimal digits, as in PIC -9(05). */
