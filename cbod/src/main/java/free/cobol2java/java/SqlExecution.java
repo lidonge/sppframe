@@ -14,6 +14,15 @@ public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
         return new SqlExecution(SqlStatus.SUCCESS, 0, null, null, null, true);
     }
 
+    public static SqlExecution noData() {
+        return new SqlExecution(SqlStatus.NO_DATA, 100, null, null, null, true);
+    }
+
+    /** Explicit source assignment, retained only at the technical compatibility boundary. */
+    public static SqlExecution fromSourceAssignment(int code) {
+        return fromSourceCode(code);
+    }
+
     public static SqlExecution fromSourceCode(int code) {
         return new SqlExecution(SqlStatus.fromSourceCode(code), code, null, null, null, true);
     }
@@ -55,6 +64,11 @@ public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
     /** Database-independent duplicate-key result for the current operation. */
     public boolean isDuplicateKey() {
         return sourceCodeKnown && sourceCode == -803;
+    }
+
+    /** Cursor lifecycle failure produced by the portable cursor registry. */
+    public boolean isCursorNotOpen() {
+        return sourceCodeKnown && sourceCode == SqlRuntimeException.CURSOR_NOT_OPEN;
     }
 
     private static SQLException sqlException(Throwable failure) {
