@@ -15,29 +15,24 @@ public interface IService {
                     || candidate.getParameterCount() != actualParameters.length) {
                 continue;
             }
-            Class<?>[] parameterTypes = candidate.getParameterTypes();
-            boolean compatible = true;
-            for (int i = 0; i < parameterTypes.length; i++) {
-                if (actualParameters[i] != null && !parameterTypes[i].isInstance(actualParameters[i])) {
-                    compatible = false;
-                    break;
-                }
-            }
-            if (compatible) {
+            if (parametersMatch(candidate.getParameterTypes(), actualParameters)) {
                 method = candidate;
                 break;
             }
         }
         if (method == null) {
-            throw new ServiceInvocationException("No compatible procedure method on " + getClass().getName());
+            throw new ServiceUnavailableException("No compatible procedure method on " + getClass().getName());
         }
         try {
             method.setAccessible(true);
             return method.invoke(this, actualParameters);
         } catch (java.lang.reflect.InvocationTargetException e) {
             Throwable cause = e.getCause() == null ? e : e.getCause();
+            if (cause instanceof CobolRollbackSignal signal) throw signal;
+            if (cause instanceof CobolProgramTransactionExit exit) throw exit;
+            if (cause instanceof Error error) throw error;
             throw new ServiceInvocationException("Service invocation failed: " + getClass().getName(), cause);
-        } catch (ReflectiveOperationException | SecurityException e) {
+        } catch (ReflectiveOperationException | SecurityException | IllegalArgumentException e) {
             throw new ServiceInvocationException("Service invocation failed: " + getClass().getName(), e);
         }
     }
@@ -47,7 +42,8 @@ public interface IService {
      * Reflection is used to find the overload with the same parameter count.
      *
      * @param parameters parameters forwarded to the procedure method
-     * @return the invoked result, or null when no compatible method is found or invocation fails
+     * @return the invoked result
+     * @throws ServiceInvocationException when the entry point cannot be invoked or fails
      */
     default Object execute(Object... parameters) {
         try {
@@ -57,7 +53,8 @@ public interface IService {
             for (java.lang.reflect.Method m : procedureMethods(this.getClass())) {
                 if (m.getName().equals("procedure")
                         && !m.isVarArgs()
-                        && m.getParameterCount() == actualParameters.length) {
+                        && m.getParameterCount() == actualParameters.length
+                        && parametersMatch(m.getParameterTypes(), actualParameters)) {
                     method = m;
                     break;
                 }
@@ -74,7 +71,8 @@ public interface IService {
             }
 
             if (method == null) {
-                throw new NoSuchMethodException("No matching procedure method found.");
+                throw new ServiceUnavailableException("No compatible procedure method on "
+                        + getClass().getName());
             }
 
             method.setAccessible(true);
@@ -85,9 +83,14 @@ public interface IService {
             }
             return method.invoke(this, actualParameters);
 
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            if (cause instanceof CobolRollbackSignal signal) throw signal;
+            if (cause instanceof CobolProgramTransactionExit exit) throw exit;
+            if (cause instanceof Error error) throw error;
+            throw new ServiceInvocationException("Service invocation failed: " + getClass().getName(), cause);
+        } catch (ReflectiveOperationException | SecurityException | IllegalArgumentException e) {
+            throw new ServiceInvocationException("Service invocation failed: " + getClass().getName(), e);
         }
     }
 
@@ -99,5 +102,29 @@ public interface IService {
             }
         }
         return methods;
+    }
+
+    private static boolean parametersMatch(Class<?>[] types, Object[] values) {
+        if (types.length != values.length) return false;
+        for (int index = 0; index < types.length; index++) {
+            Class<?> type = types[index];
+            Object value = values[index];
+            if (value == null) {
+                if (type.isPrimitive()) return false;
+                continue;
+            }
+            if (type.isPrimitive()) {
+                if (type == boolean.class) type = Boolean.class;
+                else if (type == byte.class) type = Byte.class;
+                else if (type == short.class) type = Short.class;
+                else if (type == int.class) type = Integer.class;
+                else if (type == long.class) type = Long.class;
+                else if (type == float.class) type = Float.class;
+                else if (type == double.class) type = Double.class;
+                else if (type == char.class) type = Character.class;
+            }
+            if (!type.isInstance(value)) return false;
+        }
+        return true;
     }
 }

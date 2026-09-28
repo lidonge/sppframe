@@ -45,6 +45,19 @@ public class ServiceManager {
         return serviceClass.cast(CLASS_CACHE.computeIfAbsent(serviceClass, ServiceManager::createServiceInstance));
     }
 
+    /** Resolve a generated CALL target or report a source-level unavailable target. */
+    public static <T> T requiredService(Class<T> serviceClass) {
+        try {
+            T service = getService(serviceClass);
+            if (service != null) return service;
+            throw new ServiceUnavailableException("CALL target unavailable: " + serviceClass);
+        } catch (ServiceUnavailableException failure) {
+            throw failure;
+        } catch (RuntimeException failure) {
+            throw new ServiceUnavailableException("CALL target unavailable: " + serviceClass, failure);
+        }
+    }
+
     /** A transaction region must cross an interceptable class proxy, never the local fallback. */
     public static <T> T transactionalProxy(Class<T> serviceClass) {
         if (serviceClass == null || springServiceContainer == null) {
@@ -154,6 +167,19 @@ public class ServiceManager {
         return null;
     }
 
+    /** Resolve a dynamic generated CALL target or report an unavailable target. */
+    public static IService requiredService(String name) {
+        try {
+            IService service = getService(name);
+            if (service != null) return service;
+            throw new ServiceUnavailableException("CALL target unavailable: " + name);
+        } catch (ServiceUnavailableException failure) {
+            throw failure;
+        } catch (RuntimeException failure) {
+            throw new ServiceUnavailableException("CALL target unavailable: " + name, failure);
+        }
+    }
+
     private static IService getDynamicService(Class<?> targetClass) {
         if (springServiceContainer != null) {
             Object service = springServiceContainer.getService(targetClass);
@@ -220,13 +246,22 @@ public class ServiceManager {
                     Object target = targetClass.getDeclaredConstructor().newInstance();
                     Method method = findProcedureMethod(targetClass, parameters);
                     if (method == null) {
-                        return null;
+                        throw new ServiceUnavailableException("No compatible procedure method on "
+                                + targetClass.getName());
                     }
                     method.setAccessible(true);
                     Object[] args = adaptArguments(method, parameters);
                     return method.invoke(target, args);
-                } catch (Exception e) {
-                    throw new IllegalStateException("Failed to invoke service " + targetClass.getName(), e);
+                } catch (java.lang.reflect.InvocationTargetException e) {
+                    Throwable cause = e.getCause() == null ? e : e.getCause();
+                    if (cause instanceof CobolRollbackSignal signal) throw signal;
+                    if (cause instanceof CobolProgramTransactionExit exit) throw exit;
+                    if (cause instanceof Error error) throw error;
+                    throw new ServiceInvocationException("Service invocation failed: "
+                            + targetClass.getName(), cause);
+                } catch (ReflectiveOperationException | SecurityException | IllegalArgumentException e) {
+                    throw new ServiceInvocationException("Service invocation failed: "
+                            + targetClass.getName(), e);
                 }
             }
         };
