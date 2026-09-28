@@ -202,7 +202,22 @@ public final class FileCtl {
             setFileStatus(owner, meta, sequential(meta) ? "00" : "23");
             return false;
         }
-        copyFields(record, recordArea);
+        if (recordArea instanceof String && record instanceof String) {
+            Field areaField = findField(owner.getClass(), toJavaFieldName(meta.recordAreaName));
+            if (areaField == null || areaField.getType() != String.class) {
+                setFileStatus(owner, meta, "23");
+                return false;
+            }
+            try {
+                areaField.setAccessible(true);
+                areaField.set(owner, record);
+            } catch (IllegalAccessException ex) {
+                setFileStatus(owner, meta, "23");
+                return false;
+            }
+        } else {
+            copyFields(record, recordArea);
+        }
         setFileStatus(owner, meta, "00");
         return true;
     }
@@ -395,6 +410,9 @@ public final class FileCtl {
     private static Object cloneRecord(Object source) {
         if (source == null) {
             return null;
+        }
+        if (source instanceof String) {
+            return source;
         }
         try {
             Object target = source.getClass().getDeclaredConstructor().newInstance();
