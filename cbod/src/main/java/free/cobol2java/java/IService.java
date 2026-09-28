@@ -45,6 +45,7 @@ public interface IService {
      * @return the invoked result
      * @throws ServiceInvocationException when the entry point cannot be invoked or fails
      */
+    @CobolCallDispatch
     default Object execute(Object... parameters) {
         try {
             Object[] actualParameters = parameters == null ? new Object[0] : parameters;

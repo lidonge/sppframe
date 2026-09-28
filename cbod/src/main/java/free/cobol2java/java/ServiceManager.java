@@ -180,6 +180,49 @@ public class ServiceManager {
         }
     }
 
+    /** The generated program sees only this stable SppFrame dynamic CALL facade. */
+    public static IService dynamicCall(String sourcePosition, String programName) {
+        DynamicCobolCallDispatcher dispatcher = getBean(DynamicCobolCallDispatcher.class);
+        if (dispatcher == null)
+            throw new IllegalStateException("No dynamic COBOL CALL dispatcher at " + sourcePosition);
+        return new IService() {
+            @Override
+            @CobolCallDispatch
+            public Object execute(Object... parameters) {
+                return dispatcher.dispatch(sourcePosition, programName, parameters);
+            }
+        };
+    }
+
+    public record ResolvedCobolProgram(IService service, Class<?> type) {}
+
+    /** Resolve the actual deployed program before reading its generated contract. */
+    public static ResolvedCobolProgram resolveDynamicProgram(String name) {
+        if (name == null || name.isBlank())
+            throw new ServiceUnavailableException("Dynamic CALL target is empty");
+        String program = name.trim();
+        if (springServiceContainer != null) {
+            Object registered = springServiceContainer.getService(program);
+            if (registered instanceof IService service)
+                return new ResolvedCobolProgram(service, AopUtils.getTargetClass(service));
+        }
+        Class<? extends IService> builtIn = BUILT_IN_SERVICES.get(program);
+        if (builtIn != null) return new ResolvedCobolProgram(getService(builtIn), builtIn);
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        for (String candidate : buildCandidateClassNames(program)) {
+            try {
+                Class<?> type = Class.forName(candidate, true, loader);
+                if (IService.class.isAssignableFrom(type)) {
+                    Class<? extends IService> serviceType = type.asSubclass(IService.class);
+                    return new ResolvedCobolProgram(getService(serviceType), serviceType);
+                }
+            } catch (ClassNotFoundException ignored) {
+                // Continue through the existing exact candidate names.
+            }
+        }
+        throw new ServiceUnavailableException("Dynamic CALL target unavailable: " + program);
+    }
+
     private static IService getDynamicService(Class<?> targetClass) {
         if (springServiceContainer != null) {
             Object service = springServiceContainer.getService(targetClass);
