@@ -804,6 +804,18 @@ public class Util {
                     continue;
                 }
                 Object fieldValue = field.get(target);
+                if (fieldValue instanceof String[] characters
+                        && field.getAnnotation(FieldInfo.class) != null
+                        && singleCopyableField(target.getClass(), field)) {
+                    int elementLength = declaredLength(field, null);
+                    if (elementLength <= 0)
+                        throw new IllegalStateException("Character array has no declared element length: " + field);
+                    for (int index = 0; index < characters.length; index++) {
+                        characters[index] = CobolString.fixed(slice(src, offset[0], elementLength), elementLength);
+                        offset[0] += elementLength;
+                    }
+                    continue;
+                }
                 int length = declaredLength(field, fieldValue);
                 if (length > 0 && isCopyableLeaf(field, fieldValue)) {
                     Object copied = copyTextSlice(src, offset, length, fieldValue, field.getType());
@@ -823,6 +835,16 @@ public class Util {
             } catch (IllegalAccessException ignored) {
             }
         }
+    }
+
+    private static boolean singleCopyableField(Class<?> type, Field expected) {
+        int count = 0;
+        for (Field field : type.getDeclaredFields()) {
+            if (skipField(field) || field.getAnnotation(FieldInfo.class) == null) continue;
+            count++;
+            if (!field.equals(expected)) return false;
+        }
+        return count == 1;
     }
 
     private static void populateStorageField(String src, Object target, Field field, int[] offset)
