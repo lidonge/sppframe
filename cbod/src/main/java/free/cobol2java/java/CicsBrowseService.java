@@ -33,15 +33,51 @@ public class CicsBrowseService implements DataAccessService {
     }
 
     @Override
-    public void rewrite(AccessContext context, DataAccessResource resource, Object record,
+    public Object readForUpdate(AccessContext context, DataAccessResource resource, Object key,
             AccessStatusSink status) {
+        var updates = CicsUpdateRecords.current();
+        if (updates == null || key == null) {
+            status.publish(16, 9);
+            return null;
+        }
+        String file = resource.name().toString();
+        updates.forget(file);
         var repository = repository(browseResource(resource));
         if (repository == null) {
+            status.publish(16, 9);
+            return null;
+        }
+        try {
+            var result = repository.readForUpdate(key);
+            if (result == null || result.isEmpty()) {
+                status.publish(13, 1);
+                return null;
+            }
+            updates.remember(file, repository, key);
+            status.publish(0, 0);
+            return result.get();
+        } catch (RecordNotFoundException missing) {
+            status.publish(13, 1);
+            return null;
+        } catch (free.cobol2java.cics.CicsDataAccessException failure) {
+            status.publish(16, 9);
+            return null;
+        }
+    }
+
+    @Override
+    public void rewrite(AccessContext context, DataAccessResource resource, Object record,
+            AccessStatusSink status) {
+        var updates = CicsUpdateRecords.current();
+        String file = resource.name().toString();
+        var selected = updates == null ? null : updates.get(file);
+        if (selected == null) {
             status.publish(16, 9);
             return;
         }
         try {
-            repository.rewrite(null, record);
+            selected.repository().rewrite(selected.key(), record);
+            updates.forget(file);
             status.publish(0, 0);
         } catch (RecordNotFoundException missing) {
             status.publish(13, 1);

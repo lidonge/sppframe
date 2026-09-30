@@ -6,6 +6,10 @@ public interface DataAccessService extends IService {
     Object read(AccessContext context, DataAccessResource resource, Object key,
             AccessStatusSink status);
 
+    /** Read and retain the selected record lock until the surrounding Spring transaction ends. */
+    Object readForUpdate(AccessContext context, DataAccessResource resource, Object key,
+            AccessStatusSink status);
+
     /** Rewrite the current source record without exposing Repository lookup or response types. */
     void rewrite(AccessContext context, DataAccessResource resource, Object record,
             AccessStatusSink status);
