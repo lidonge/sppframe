@@ -14,6 +14,12 @@ final class SqlDriverErrorCompatibility {
                 && "42S02".equals(failure.getSQLState())) {
             return -204;
         }
+        // H2 reports the same missing table with a separate diagnostic when
+        // similar names exist, or when the database has no user tables.
+        if ((failure.getErrorCode() == 42103 && "42S03".equals(failure.getSQLState()))
+                || (failure.getErrorCode() == 42104 && "42S04".equals(failure.getSQLState()))) {
+            return -204;
+        }
         // Unknown column in that query: Db2 -206 (invalid column reference).
         if ((failure.getErrorCode() == 1054 || failure.getErrorCode() == 42122)
                 && "42S22".equals(failure.getSQLState())) {
