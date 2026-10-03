@@ -27,6 +27,14 @@ public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
         return new SqlExecution(SqlStatus.fromSourceCode(code), code, null, null, null, true);
     }
 
+    /** Only SQL failures enter source SQLCODE/WHENEVER handling. */
+    public static boolean isSqlFailure(Throwable failure) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            if (current instanceof SQLException || current instanceof SqlRuntimeException) return true;
+        }
+        return false;
+    }
+
     public static SqlExecution fromFailure(RuntimeException failure) {
         SQLException sqlFailure = sqlException(failure);
         Integer mappedCode = failure instanceof SqlRuntimeException sourceFailure
@@ -63,12 +71,12 @@ public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
 
     /** Database-independent duplicate-key result for the current operation. */
     public boolean isDuplicateKey() {
-        return sourceCodeKnown && sourceCode == -803;
+        return sourceCode() == -803;
     }
 
     /** Cursor lifecycle failure produced by the portable cursor registry. */
     public boolean isCursorNotOpen() {
-        return sourceCodeKnown && sourceCode == SqlRuntimeException.CURSOR_NOT_OPEN;
+        return sourceCode() == SqlRuntimeException.CURSOR_NOT_OPEN;
     }
 
     private static SQLException sqlException(Throwable failure) {
