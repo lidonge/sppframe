@@ -34,6 +34,10 @@ final class SqlDriverErrorCompatibility {
         if (failure.getErrorCode() == 1062 && "23000".equals(failure.getSQLState())) {
             return -803;
         }
+        // H2 DUPLICATE_KEY_1 reports the same unique/primary-key violation.
+        if (failure.getErrorCode() == 23505 && "23505".equals(failure.getSQLState())) {
+            return -803;
+        }
         return null;
     }
 }

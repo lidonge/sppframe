@@ -45,6 +45,10 @@ public final class TransactionRegionAspect {
             PlatformTransactionManager manager = managers.getIfAvailable();
             if (manager == null)
                 throw new IllegalStateException("No transaction manager for result-driven COBOL region");
+            // Source SQLERROR processing resumes after completion. A JDBC commit failure
+            // must roll back before Spring restores auto-commit and releases the connection.
+            if (manager instanceof org.springframework.jdbc.datasource.DataSourceTransactionManager jdbc)
+                jdbc.setRollbackOnCommitFailure(true);
             TransactionStatus status = manager.getTransaction(new DefaultTransactionDefinition());
             if (!status.isNewTransaction())
                 throw new IllegalStateException("Result-driven region did not obtain its own transaction");
