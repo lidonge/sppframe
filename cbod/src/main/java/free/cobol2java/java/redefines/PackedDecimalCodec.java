@@ -4,11 +4,11 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Arrays;
 
-final class PackedDecimalCodec {
+public final class PackedDecimalCodec {
     private PackedDecimalCodec() {
     }
 
-    static BigDecimal decode(byte[] storage, int start, int length, int scale) {
+    public static BigDecimal decode(byte[] storage, int start, int length, int scale) {
         StringBuilder digits = new StringBuilder(length * 2 - 1);
         boolean negative = false;
         for (int i = start; i < start + length; i++) {
@@ -34,7 +34,7 @@ final class PackedDecimalCodec {
         return new BigDecimal((negative ? "-" : "") + number).movePointLeft(scale);
     }
 
-    static void encode(byte[] storage, int start, int length, int scale, BigDecimal value) {
+    public static void encode(byte[] storage, int start, int length, int scale, BigDecimal value) {
         BigDecimal scaled = value.setScale(scale);
         BigInteger unscaled = scaled.unscaledValue().abs();
         String digits = unscaled.toString();

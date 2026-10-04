@@ -804,6 +804,15 @@ public class Util {
                     continue;
                 }
                 Object fieldValue = field.get(target);
+                FieldInfo stateInfo = field.getAnnotation(FieldInfo.class);
+                if (stateInfo != null && "UTF8_STATE".equals(stateInfo.storageBinding())) {
+                    if (field.getType() != String.class || stateInfo.byteLength() < 1)
+                        throw new IllegalStateException("Invalid UTF8 state field contract: " + field);
+                    int width = stateInfo.byteLength();
+                    field.set(target, CobolUtf8Codec.write(" ".repeat(width), slice(src, offset[0], width), 0, width));
+                    offset[0] += width;
+                    continue;
+                }
                 if (fieldValue instanceof String[] characters
                         && field.getAnnotation(FieldInfo.class) != null
                         && singleCopyableField(target.getClass(), field)) {
@@ -1424,6 +1433,11 @@ public class Util {
 
     private static String renderFieldValue(Field field, Object fieldValue, IdentityHashMap<Object, Boolean> visited) {
         FieldInfo fieldInfo = field.getAnnotation(FieldInfo.class);
+        if (fieldInfo != null && "UTF8_STATE".equals(fieldInfo.storageBinding())) {
+            if (field.getType() != String.class || fieldInfo.byteLength() < 1)
+                throw new IllegalStateException("Invalid UTF8 state field contract: " + field);
+            return CobolUtf8Codec.read((String) fieldValue, 0, fieldInfo.byteLength());
+        }
         if (field.getType().isArray()) {
             if (fieldValue == null) {
                 return "";
