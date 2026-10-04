@@ -6,6 +6,9 @@ import java.sql.SQLException;
 public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
                            Integer vendorCode, String nativeErrorMsg,
                            boolean sourceCodeKnown) {
+    /** Application-defined code for an unclassified JDBC error; not an original DB2 diagnostic. */
+    public static final int RUNTIME_SQL_ERROR = -99001;
+
     public SqlExecution {
         if (status == null) throw new IllegalArgumentException("status");
     }
@@ -39,7 +42,7 @@ public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
         SQLException sqlFailure = sqlException(failure);
         Integer mappedCode = failure instanceof SqlRuntimeException sourceFailure
                 ? sourceFailure.getSqlCode() : SqlDriverErrorCompatibility.sourceCode(sqlFailure);
-        return new SqlExecution(SqlStatus.ERROR, mappedCode == null ? -1 : mappedCode,
+        return new SqlExecution(SqlStatus.ERROR, mappedCode == null ? RUNTIME_SQL_ERROR : mappedCode,
                 sqlFailure == null ? null : sqlFailure.getSQLState(),
                 sqlFailure == null ? null : sqlFailure.getErrorCode(),
                 sqlFailure == null ? failure.getMessage() : sqlFailure.getMessage(),
@@ -48,20 +51,13 @@ public record SqlExecution(SqlStatus status, int sourceCode, String sqlState,
 
     @Override
     public int sourceCode() {
-        if (!sourceCodeKnown) throw new UnsupportedOperationException(
-                "No proven source SQLCODE mapping for SQLSTATE=" + sqlState
-                        + ", vendorCode=" + vendorCode);
         return sourceCode;
     }
 
-    /** Technical mapping used only for source-observable SQLCODE moves. */
+    /** Proven source code or declared runtime code for observable SQLCODE moves.
+     * sourceCodeKnown records the original-code provenance, not whether this value is readable. */
     public int sourceCompatibleDisplayValue() {
-        if (sourceCodeKnown) return sourceCode;
-        if (status == SqlStatus.SUCCESS) return 0;
-        if (status == SqlStatus.NO_DATA) return 100;
-        throw new UnsupportedOperationException(
-                "No proven source SQLCODE display mapping for SQLSTATE=" + sqlState
-                        + ", vendorCode=" + vendorCode);
+        return sourceCode;
     }
 
     /** Source-compatible text for a proven numeric-edited receiving picture. */
