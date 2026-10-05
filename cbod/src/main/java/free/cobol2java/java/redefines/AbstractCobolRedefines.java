@@ -97,7 +97,9 @@ public abstract class AbstractCobolRedefines<T> implements ICobolRedefines<T> {
             actual = "0";
         }
         if (actual.length() < length) {
-            actual = "0".repeat(length - actual.length()) + actual;
+            int signLength = actual.charAt(0) == '-' || actual.charAt(0) == '+' ? 1 : 0;
+            actual = actual.substring(0, signLength)
+                    + "0".repeat(length - actual.length()) + actual.substring(signLength);
         }
         writeBytes(actual.getBytes(charset));
     }
