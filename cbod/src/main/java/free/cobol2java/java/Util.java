@@ -321,6 +321,7 @@ public class Util {
         if (src == null) {
             return null;
         }
+        if (src instanceof CobolEncodedGroup group) return CobolGroupEncoding.characters(group);
         if (src instanceof String value) {
             return value;
         }
@@ -765,6 +766,10 @@ public class Util {
         if (target == null) {
             return null;
         }
+        if (target instanceof CobolEncodedGroup group) {
+            CobolGroupEncoding.receiveCharacters(src, group);
+            return target;
+        }
         if (target instanceof StringCobolRedefines stringView) {
             // A generated group may itself be the canonical storage view.
             // Writing its annotated child fields would consume the source
@@ -804,6 +809,13 @@ public class Util {
                     continue;
                 }
                 Object fieldValue = field.get(target);
+                if (fieldValue instanceof ExclusivePointerState pointerState) {
+                    FieldInfo info = field.getAnnotation(FieldInfo.class);
+                    if (info == null || info.byteLength() < 1)
+                        throw new IllegalStateException("Missing exclusive POINTER source extent: " + field);
+                    offset[0] += pointerState.readFromGroup(src, offset[0]);
+                    continue;
+                }
                 FieldInfo stateInfo = field.getAnnotation(FieldInfo.class);
                 if (stateInfo != null && "UTF8_STATE".equals(stateInfo.storageBinding())) {
                     if (field.getType() != String.class || stateInfo.byteLength() < 1)
@@ -1162,6 +1174,10 @@ public class Util {
     }
 
     private static void initializeObject(Object instance) {
+        if (instance instanceof ExclusivePointerState pointerState) {
+            pointerState.initializeGroup();
+            return;
+        }
         if (instance == null || isSimpleType(instance.getClass()) || instance instanceof AbstractCobolRedefines<?>) {
             return;
         }
@@ -1432,6 +1448,7 @@ public class Util {
     }
 
     private static String renderFieldValue(Field field, Object fieldValue, IdentityHashMap<Object, Boolean> visited) {
+        if (fieldValue instanceof ExclusivePointerState pointerState) return pointerState.groupState();
         FieldInfo fieldInfo = field.getAnnotation(FieldInfo.class);
         if (fieldInfo != null && "UTF8_STATE".equals(fieldInfo.storageBinding())) {
             if (field.getType() != String.class || fieldInfo.byteLength() < 1)
