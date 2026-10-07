@@ -57,6 +57,29 @@ public final class CobolCharacterAddress {
 
     public int offset() { return offset; }
 
+    /** Preserve the canonical space identity when a declared view applies its relative offset. */
+    public CobolCharacterAddress plus(int displacement) {
+        return space.at(Math.addExact(offset, displacement));
+    }
+
+    /** Lossless Codec state; unlike a public character value this also preserves arbitrary bytes. */
+    public String readState(int width) {
+        checkWidth(width);
+        String current = space.current();
+        return space.utf8 ? CobolUtf8Codec.sliceState(current, offset, width)
+                : current.substring(offset, offset + width);
+    }
+
+    public void writeState(String value, int width) {
+        checkWidth(width);
+        Objects.requireNonNull(value, "Character address replacement state");
+        int length = space.utf8 ? CobolUtf8Codec.encodeState(value).length : value.length();
+        if (length != width) throw new IllegalArgumentException("Character address replacement extent differs");
+        String current = space.current();
+        space.setter.accept(space.utf8 ? CobolUtf8Codec.writeState(current, value, offset, width)
+                : current.substring(0, offset) + value + current.substring(offset + width));
+    }
+
     public String read(int width) {
         checkWidth(width);
         String current = space.current();
