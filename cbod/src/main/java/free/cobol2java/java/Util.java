@@ -1377,6 +1377,7 @@ public class Util {
         if (value == null) {
             return "";
         }
+        if (value instanceof CobolEncodedGroup group) return CobolGroupEncoding.characters(group);
         if (visited.containsKey(value)) {
             return "";
         }
