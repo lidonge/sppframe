@@ -11,19 +11,39 @@ public final class ExclusivePointerState {
     private final int pointerWidth;
     private final int integerWidth;
     private final String identity;
+    private final String sourceFile;
+    private final int sourceLine;
+    private final boolean integerBase;
     private String retainedTail;
 
     public ExclusivePointerState(int pointerWidth, int integerWidth, String identity) {
+        this(pointerWidth, integerWidth, identity, "<source not supplied>", 0);
+    }
+
+    public ExclusivePointerState(int pointerWidth, int integerWidth, String identity,
+                                 String sourceFile, int sourceLine) {
+        this(pointerWidth, integerWidth, identity, sourceFile, sourceLine, false);
+    }
+
+    public ExclusivePointerState(int pointerWidth, int integerWidth, String identity,
+                                 String sourceFile, int sourceLine, boolean integerBase) {
         if (pointerWidth < integerWidth || integerWidth != Integer.BYTES)
             throw new IllegalArgumentException("Unsupported exclusive pointer word extent");
         this.pointerWidth = pointerWidth;
         this.integerWidth = integerWidth;
         this.identity = Objects.requireNonNull(identity);
+        this.sourceFile = Objects.requireNonNull(sourceFile);
+        this.sourceLine = sourceLine;
+        this.integerBase = integerBase;
         retainedTail = "\0".repeat(pointerWidth - integerWidth);
     }
 
     public Object getPointer() {
-        if (integerRole) warn();
+        if (integerRole) {
+            if ((Integer) value != 0 || retainedTail.chars().anyMatch(character -> character != 0))
+                throw addressError("INTEGER_TO_POINTER");
+            return null;
+        }
         return value;
     }
 
@@ -34,27 +54,28 @@ public final class ExclusivePointerState {
     }
 
     public Integer getInteger() {
-        if (!integerRole && value != null) warn();
+        if (!integerRole && value != null) throw addressError("POINTER_TO_INTEGER");
         return value == null ? 0 : (Integer) value;
     }
 
     public void setInteger(Integer number) {
+        if (integerBase && !integerRole && value != null && pointerWidth > integerWidth)
+            throw addressError("PARTIAL_WRITE_TO_POINTER");
         value = number == null ? 0 : number;
         integerRole = true;
     }
 
     /** Group INITIALIZE excludes the POINTER base and its REDEFINES view. */
-    public void initializeGroup() { }
+    public void initializeGroup() { if (integerBase) setInteger(0); }
 
-    private void warn() {
-        System.getLogger(ExclusivePointerState.class.getName()).log(System.Logger.Level.WARNING,
-                "Non-exclusive pointer/integer use: " + identity);
+    private UnsupportedAbsoluteAddressException addressError(String operation) {
+        return new UnsupportedAbsoluteAddressException(identity, operation, sourceFile, sourceLine);
     }
 
     /** Portable group bytes exist for numeric or null roles; a Java reference has no native address encoding. */
     public String groupState() {
         if (!integerRole && value != null)
-            throw new IllegalStateException("Native pointer encoding requires an explicit ABI: " + identity);
+            throw addressError("POINTER_TO_BYTES");
         byte[] bytes = new byte[pointerWidth];
         ByteBuffer.wrap(bytes).putInt(value == null ? 0 : (Integer) value);
         byte[] tail = CobolUtf8Codec.encodeState(retainedTail);
