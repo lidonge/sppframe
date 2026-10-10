@@ -6,7 +6,8 @@ import java.math.BigDecimal;
 /** Packed value boundary; the sign nibble is encoding metadata, including negative zero. */
 public final class PackedValueCodec {
     public static byte[] encode(BigDecimal value, int width, int precision, int scale, int sign) {
-        if (width < 1 || precision != width * 2 - 1 || scale < 0 || scale > precision)
+        if (width < 1 || precision < 1 || width != (precision + 2L) / 2
+                || scale < 0 || scale > precision)
             throw new IllegalArgumentException("Unsupported packed value extent");
         BigDecimal decimal = value.setScale(scale);
         if (decimal.unscaledValue().abs().toString().length() > precision)
@@ -23,8 +24,10 @@ public final class PackedValueCodec {
     }
 
     public static BigDecimal decode(byte[] bytes, int precision, int scale) {
-        if (bytes.length < 1 || precision != bytes.length * 2 - 1)
+        if (bytes.length < 1 || precision < 1 || bytes.length != (precision + 2L) / 2)
             throw new IllegalArgumentException("Unsupported packed value extent");
+        if ((precision & 1) == 0 && (bytes[0] & 0xf0) != 0)
+            throw new IllegalArgumentException("Nonzero unused nibble in even-precision packed value");
         return PackedDecimalCodec.decode(bytes, 0, bytes.length, scale);
     }
 
